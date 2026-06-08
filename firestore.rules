@@ -33,7 +33,7 @@ service cloud.firestore {
              data.state in ['open', 'completed', 'scheduled', 'migrated', 'canceled'] &&
              data.signifiers is map && data.signifiers.keys().hasAll(['priority', 'idea', 'explore']) &&
              data.signifiers.priority is bool && data.signifiers.idea is bool && data.signifiers.explore is bool &&
-             data.logType in ['daily', 'monthly', 'future'] &&
+             data.logType in ['daily', 'monthly', 'future', 'collection'] &&
              data.date is string && data.date.size() <= 20 &&
              (data.keys().hasAll(['collectionId']) ? (data.collectionId == null || (data.collectionId is string && data.collectionId.size() <= 128)) : true) &&
              data.createdAt is string && data.updatedAt is string && data.order is number;
