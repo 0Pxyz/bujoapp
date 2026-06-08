@@ -28,7 +28,14 @@ interface BuJoDockProps {
   isMobile?: boolean;
 }
 
-export const BuJoDock: React.FC<BuJoDockProps> = ({ className, isMobile }) => {
+function useIsMobile() {
+  const [m, setM] = React.useState(false);
+  React.useEffect(() => { const c = () => setM(window.innerWidth < 768); c(); window.addEventListener('resize', c); return () => window.removeEventListener('resize', c); }, []);
+  return m;
+}
+
+export const BuJoDock: React.FC<BuJoDockProps> = ({ className, isMobile: propMobile }) => {
+  const isMobile = propMobile ?? useIsMobile();
   const { collections, createCollection, addEntry } = useBuJo();
   const [expanded, setExpanded] = useState(false);
   const [inputText, setInputText] = useState('');
