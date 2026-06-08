@@ -1,0 +1,9 @@
+services:
+  bujo:
+    build: .
+    container_name: bujo-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env.local

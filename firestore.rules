@@ -1,0 +1,116 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidEntry(data) {
+      return data.keys().hasAll(['text', 'type', 'state', 'signifiers', 'logType', 'date', 'createdAt', 'updatedAt', 'order']) &&
+             data.text is string && data.text.size() <= 500 &&
+             data.type in ['task', 'note', 'event'] &&
+             data.state in ['open', 'completed', 'scheduled', 'migrated', 'canceled'] &&
+             data.signifiers is map && data.signifiers.keys().hasAll(['priority', 'idea', 'explore']) &&
+             data.signifiers.priority is bool && data.signifiers.idea is bool && data.signifiers.explore is bool &&
+             data.logType in ['daily', 'monthly', 'future'] &&
+             data.date is string && data.date.size() <= 20 &&
+             (data.keys().hasAll(['collectionId']) ? (data.collectionId == null || (data.collectionId is string && data.collectionId.size() <= 128)) : true) &&
+             data.createdAt is string && data.updatedAt is string && data.order is number;
+    }
+
+    function isValidCollection(data) {
+      return data.keys().hasAll(['title', 'createdAt', 'updatedAt']) &&
+             data.title is string && data.title.size() <= 100 &&
+             (data.keys().hasAll(['description']) ? (data.description == null || (data.description is string && data.description.size() <= 500)) : true) &&
+             data.createdAt is string && data.updatedAt is string;
+    }
+    
+    function isValidHabit(data) {
+      return data.keys().hasAll(['name', 'frequencyType', 'specificDays', 'timesPerWeek', 'createdAt', 'updatedAt']) &&
+             data.name is string && data.name.size() <= 100 &&
+             data.frequencyType in ['daily', 'specific_days', 'interval'] &&
+             data.specificDays is list && data.specificDays.size() <= 7 &&
+             data.timesPerWeek is number &&
+             data.createdAt is string && data.updatedAt is string;
+    }
+
+    function isValidHabitLog(data) {
+      return data.keys().hasAll(['habitId', 'date', 'completed', 'createdAt', 'updatedAt']) &&
+             data.habitId is string && data.habitId.size() <= 128 &&
+             data.date is string && data.date.size() <= 20 &&
+             data.completed is bool &&
+             data.createdAt is string && data.updatedAt is string;
+    }
+
+
+
+    match /users/{userId}/entries/{entryId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null && request.auth.uid == userId && 
+                    isValidId(entryId) && isValidEntry(incoming());
+      allow update: if request.auth != null && request.auth.uid == userId && 
+                    isValidId(entryId) && isValidEntry(incoming()) && 
+                    incoming().createdAt == existing().createdAt &&
+                    incoming().diff(existing()).affectedKeys().hasAny(['text', 'type', 'state', 'signifiers', 'logType', 'date', 'collectionId', 'updatedAt', 'order']);
+      allow delete: if request.auth != null && request.auth.uid == userId && isValidId(entryId);
+    }
+    
+    match /users/{userId}/collections/{collectionId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null && request.auth.uid == userId && 
+                    isValidId(collectionId) && isValidCollection(incoming());
+      allow update: if request.auth != null && request.auth.uid == userId && 
+                    isValidId(collectionId) && isValidCollection(incoming()) && 
+                    incoming().createdAt == existing().createdAt &&
+                    incoming().diff(existing()).affectedKeys().hasAny(['title', 'description', 'updatedAt']);
+      allow delete: if request.auth != null && request.auth.uid == userId && isValidId(collectionId);
+    }
+
+    match /users/{userId}/habits/{habitId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null && request.auth.uid == userId && 
+                    isValidId(habitId) && isValidHabit(incoming());
+      allow update: if request.auth != null && request.auth.uid == userId && 
+                    isValidId(habitId) && isValidHabit(incoming()) && 
+                    incoming().createdAt == existing().createdAt &&
+                    incoming().diff(existing()).affectedKeys().hasAny(['name', 'frequencyType', 'specificDays', 'timesPerWeek', 'updatedAt']);
+      allow delete: if request.auth != null && request.auth.uid == userId && isValidId(habitId);
+    }
+
+    match /users/{userId}/habitLogs/{habitLogId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null && request.auth.uid == userId && 
+                    isValidId(habitLogId) && isValidHabitLog(incoming());
+      allow update: if request.auth != null && request.auth.uid == userId && 
+                    isValidId(habitLogId) && isValidHabitLog(incoming()) && 
+                    incoming().createdAt == existing().createdAt &&
+                    incoming().diff(existing()).affectedKeys().hasAny(['completed', 'updatedAt']);
+      allow delete: if request.auth != null && request.auth.uid == userId && isValidId(habitLogId);
+    }
+
+    match /users/{userId}/settings/{documentId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}

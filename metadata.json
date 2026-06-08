@@ -1,0 +1,10 @@
+{
+  "name": "BuJo AI",
+  "description": "A digital Bullet Journal with an AI assistant to organize your life.",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

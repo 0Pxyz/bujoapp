@@ -1,0 +1,101 @@
+{
+  "entities": {
+    "Entry": {
+      "title": "Entry",
+      "description": "A bullet journal entry",
+      "type": "object",
+      "properties": {
+        "text": { "type": "string" },
+        "type": { "type": "string", "enum": ["task", "note", "event"] },
+        "state": { "type": "string", "enum": ["open", "completed", "scheduled", "migrated", "canceled"] },
+        "signifiers": {
+          "type": "object",
+          "properties": {
+            "priority": { "type": "boolean" },
+            "idea": { "type": "boolean" },
+            "explore": { "type": "boolean" }
+          },
+          "required": ["priority", "idea", "explore"]
+        },
+        "logType": { "type": "string", "enum": ["daily", "monthly", "future"] },
+        "date": { "type": "string" },
+        "collectionId": { "type": ["string", "null"] },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "order": { "type": "number" }
+      },
+      "required": ["text", "type", "state", "signifiers", "logType", "date", "createdAt", "updatedAt", "order"]
+    },
+    "Collection": {
+      "title": "Collection",
+      "description": "A custom list or collection of entries",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": ["string", "null"] },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["title", "createdAt", "updatedAt"]
+    },
+    "Habit": {
+      "title": "Habit",
+      "description": "A habit to track",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "frequencyType": { "type": "string", "enum": ["daily", "specific_days", "interval"] },
+        "specificDays": { "type": "array" },
+        "timesPerWeek": { "type": "number" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["name", "frequencyType", "specificDays", "timesPerWeek", "createdAt", "updatedAt"]
+    },
+    "HabitLog": {
+      "title": "HabitLog",
+      "description": "Log of completion for a habit on a specific date",
+      "type": "object",
+      "properties": {
+        "habitId": { "type": "string" },
+        "date": { "type": "string" },
+        "completed": { "type": "boolean" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["habitId", "date", "completed", "createdAt", "updatedAt"]
+    },
+    "Settings": {
+      "title": "Settings",
+      "description": "User specific application settings",
+      "type": "object",
+      "properties": {
+        "theme": { "type": "string", "enum": ["light", "dark", "system"] }
+      },
+      "additionalProperties": true,
+      "required": ["theme"]
+    }
+  },
+  "firestore": {
+    "users/{userId}/entries/{entryId}": {
+      "schema": { "$ref": "#/entities/Entry" },
+      "description": "Entries for a specific user"
+    },
+    "users/{userId}/collections/{collectionId}": {
+      "schema": { "$ref": "#/entities/Collection" },
+      "description": "Collections for a specific user"
+    },
+    "users/{userId}/habits/{habitId}": {
+      "schema": { "$ref": "#/entities/Habit" },
+      "description": "Habits for a specific user"
+    },
+    "users/{userId}/habitLogs/{habitLogId}": {
+      "schema": { "$ref": "#/entities/HabitLog" },
+      "description": "Habit logs for a specific user"
+    },
+    "users/{userId}/settings/{documentId}": {
+      "schema": { "$ref": "#/entities/Settings" },
+      "description": "Settings for a specific user"
+    }
+  }
+}
