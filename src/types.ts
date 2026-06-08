@@ -51,13 +51,17 @@ export interface HabitLog {
 
 export type Theme = 'light' | 'dark' | 'system';
 export type FontSize = 'small' | 'medium' | 'large';
+export type FontFamily = 'serif' | 'sans';
 export type StartOfWeek = 'sunday' | 'monday';
 export type AIAssistance = 'off' | 'suggestions' | 'active';
+export type LayoutDensity = 'comfortable' | 'compact';
 
 export interface AppSettings {
   theme: Theme;
   accentColor?: string;
   fontSize?: FontSize;
+  fontFamily?: FontFamily;
+  layoutDensity?: LayoutDensity;
   symbols?: {
     task: string;
     note: string;
@@ -79,6 +83,11 @@ export interface AppSettings {
   shortcuts?: {
     globalSearch: string;
     focusNewEntry: string;
+  };
+  notifications?: {
+    dailyReminder: boolean;
+    habitReminder: boolean;
+    weeklyDigest: boolean;
   };
 }
 

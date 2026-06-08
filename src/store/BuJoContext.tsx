@@ -35,7 +35,11 @@ const BuJoContext = createContext<BuJoContextType | undefined>(undefined);
 
 const defaultSettings: AppSettings = {
   theme: 'system',
-  shortcuts: { globalSearch: 'meta+k', focusNewEntry: 'n' }
+  fontSize: 'medium',
+  fontFamily: 'sans',
+  layoutDensity: 'comfortable',
+  shortcuts: { globalSearch: 'meta+k', focusNewEntry: 'n' },
+  notifications: { dailyReminder: false, habitReminder: false, weeklyDigest: false }
 };
 
 export const BuJoProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -89,18 +93,22 @@ export const BuJoProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [user]);
 
   useEffect(() => {
-    const applyTheme = (theme: 'light' | 'dark' | 'system') => {
-      const root = window.document.documentElement;
-      root.classList.remove('light', 'dark');
-      if (theme === 'system') {
-        const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-        root.classList.add(systemTheme);
-      } else {
-        root.classList.add(theme);
-      }
-    };
-    applyTheme(state.settings.theme);
-  }, [state.settings.theme]);
+    const root = document.documentElement;
+    const s = state.settings;
+
+    root.classList.remove('light', 'dark');
+    if (s.theme === 'system') {
+      const mq = window.matchMedia('(prefers-color-scheme: dark)');
+      root.classList.add(mq.matches ? 'dark' : 'light');
+    } else {
+      root.classList.add(s.theme);
+    }
+
+    root.style.setProperty('--accent', s.accentColor || 'neutral');
+    root.style.setProperty('--font-size', s.fontSize === 'small' ? '14px' : s.fontSize === 'large' ? '18px' : '16px');
+    root.style.setProperty('--font-family', s.fontFamily === 'serif' ? "'Georgia', serif" : "'Inter', system-ui, sans-serif");
+    root.style.setProperty('--density', s.layoutDensity === 'compact' ? '1' : '1.5');
+  }, [state.settings]);
 
   const addEntry = async (text: string, type: BulletType, logType: LogType, date: string, signifiers = { priority: false, idea: false, explore: false }, collectionId?: string) => {
     if (!user) return;
