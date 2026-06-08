@@ -104,10 +104,11 @@ export const BuJoProvider: React.FC<{ children: React.ReactNode }> = ({ children
       root.classList.add(s.theme);
     }
 
+    root.classList.remove('text-sm', 'text-base', 'text-lg', 'font-sans', 'font-serif', 'density-comfortable', 'density-compact');
+    root.classList.add(s.fontFamily === 'serif' ? 'font-serif' : 'font-sans');
+    root.classList.add(s.fontSize === 'small' ? 'text-sm' : s.fontSize === 'large' ? 'text-lg' : 'text-base');
+    root.classList.add(s.layoutDensity === 'compact' ? 'density-compact' : 'density-comfortable');
     root.style.setProperty('--accent', s.accentColor || 'neutral');
-    root.style.setProperty('--font-size', s.fontSize === 'small' ? '14px' : s.fontSize === 'large' ? '18px' : '16px');
-    root.style.setProperty('--font-family', s.fontFamily === 'serif' ? "'Georgia', serif" : "'Inter', system-ui, sans-serif");
-    root.style.setProperty('--density', s.layoutDensity === 'compact' ? '1' : '1.5');
   }, [state.settings]);
 
   const addEntry = async (text: string, type: BulletType, logType: LogType, date: string, signifiers = { priority: false, idea: false, explore: false }, collectionId?: string) => {
