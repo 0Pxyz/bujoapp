@@ -1,0 +1,12 @@
+{
+  "name": "BuJo",
+  "short_name": "BuJo",
+  "description": "Digital Bullet Journal",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fafafa",
+  "theme_color": "#1a1a1a",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

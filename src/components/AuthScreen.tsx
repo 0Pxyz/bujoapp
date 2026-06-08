@@ -1,32 +1,27 @@
 import React from 'react';
 import { LogIn, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
+import { signInWithRedirect, getRedirectResult, GoogleAuthProvider } from 'firebase/auth';
 import { auth } from '../firebase';
 
 export const AuthScreen = () => {
   const [isLoading, setIsLoading] = React.useState(false);
   const [authError, setAuthError] = React.useState<string | null>(null);
 
-  const handleSignIn = async () => {
+  React.useEffect(() => {
+    getRedirectResult(auth).catch((error) => {
+      const code = (error as { code?: string }).code;
+      if (code === 'auth/popup-closed-by-user') return;
+      if (code === 'auth/cancelled-popup-request') return;
+      setAuthError('Sign-in failed. Please try again.');
+    });
+  }, []);
+
+  const handleSignIn = () => {
     setIsLoading(true);
     setAuthError(null);
-    try {
-      const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
-    } catch (error) {
-      const code = (error as { code?: string }).code;
-      if (code === 'auth/popup-blocked') {
-        setAuthError('Pop-up was blocked. Please allow pop-ups for this site and try again.');
-      } else if (code === 'auth/popup-closed-by-user') {
-      } else if (code === 'auth/cancelled-popup-request') {
-      } else {
-        console.error('Sign-in error:', error);
-        setAuthError('Something went wrong. Please try again.');
-      }
-    } finally {
-      setIsLoading(false);
-    }
+    const provider = new GoogleAuthProvider();
+    signInWithRedirect(auth, provider);
   };
 
   return (
