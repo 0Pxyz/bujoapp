@@ -20,7 +20,7 @@ export const Settings = () => {
     <motion.div 
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="max-w-3xl mx-auto p-4 md:p-8 mb-20"
+      className="max-w-3xl mx-auto py-6 md:py-12 px-4 md:px-6 mb-20"
     >
       <div className="mb-10 flex items-center gap-3">
         <div className="w-10 h-10 rounded-xl bg-neutral-900 dark:bg-neutral-100 flex items-center justify-center">

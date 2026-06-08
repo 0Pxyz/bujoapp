@@ -24,7 +24,7 @@ export const Collections = () => {
     <motion.div 
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="max-w-4xl mx-auto py-12 px-6"
+      className="max-w-4xl mx-auto py-6 md:py-12 px-4 md:px-6"
     >
       <AnimatePresence mode="wait">
         {!activeCollectionId ? (

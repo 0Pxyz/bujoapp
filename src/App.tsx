@@ -11,10 +11,9 @@ import { BuJoProvider, useBuJo } from './store/BuJoContext';
 import { BuJoDock } from './components/BuJoDock';
 import { GlobalSearch } from './components/GlobalSearch';
 import { AuthScreen } from './components/AuthScreen';
-import { BookOpen, CalendarDays, CalendarSearch, Library, ArrowRightLeft, Target, BarChart2, PanelLeftClose, PanelLeftOpen, Search, Settings as SettingsIcon, Menu, X, LogOut } from 'lucide-react';
+import { BookOpen, CalendarDays, CalendarSearch, Library, ArrowRightLeft, Target, BarChart2, PanelLeftClose, PanelLeftOpen, Search, Settings as SettingsIcon, Menu } from 'lucide-react';
 import { cn } from './lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
-import { auth } from './firebase';
 
 type ViewType = 'daily' | 'monthly' | 'future' | 'collections' | 'habits' | 'insights' | 'migration' | 'settings';
 
@@ -151,70 +150,66 @@ const AppContent = () => {
         <NavLinks />
       </aside>
 
-      <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-white dark:bg-neutral-900 border-b border-neutral-200/50 dark:border-neutral-800/50 flex items-center justify-between px-4 z-[60]">
-        <h2 className="text-xl font-serif font-bold tracking-tight">BuJo</h2>
-        <div className="flex items-center space-x-2">
-          <BuJoDock isMobile className="md:hidden" />
-          <button 
+      <div className="md:hidden fixed top-0 left-0 right-0 h-12 bg-white/90 dark:bg-neutral-900/90 backdrop-blur-xl border-b border-neutral-200/50 dark:border-neutral-800/50 flex items-center justify-between px-4 z-[60]">
+        <h2 className="text-lg font-serif font-bold tracking-tight">BuJo</h2>
+        <div className="flex items-center gap-3">
+          <button
             onClick={() => setIsSearchOpen(true)}
-            className="p-2 bg-neutral-100 dark:bg-neutral-800 rounded-full text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100"
+            className="w-9 h-9 flex items-center justify-center bg-neutral-100 dark:bg-neutral-800 rounded-full text-neutral-500 active:scale-95 transition-transform"
           >
             <Search className="w-4 h-4" />
           </button>
         </div>
       </div>
 
-      <main className="flex-1 overflow-y-auto w-full pt-14 md:pt-0 pb-20 md:pb-0 px-4 sm:px-6 lg:px-8 custom-scrollbar">
+      <main className="flex-1 overflow-y-auto w-full pt-12 md:pt-0 pb-20 md:pb-0 custom-scrollbar">
         {renderView()}
       </main>
 
       <AnimatePresence>
         {isMobileMenuOpen && (
           <>
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsMobileMenuOpen(false)}
-              className="md:hidden fixed inset-0 bg-neutral-900/40 backdrop-blur-[2px] z-30"
+              className="md:hidden fixed inset-0 bg-neutral-900/60 backdrop-blur-sm z-30"
             />
             <motion.div
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
-              transition={{ type: "spring", bounce: 0, duration: 0.4 }}
-              className="md:hidden fixed bottom-16 left-0 right-0 bg-white dark:bg-neutral-900 border-t border-neutral-200 dark:border-neutral-800 rounded-t-3xl shadow-2xl z-30 flex flex-col pt-2 pb-6 px-4"
+              transition={{ type: "spring", bounce: 0, duration: 0.35 }}
+              className="md:hidden fixed bottom-16 left-0 right-0 bg-white dark:bg-neutral-900 border-t border-neutral-200 dark:border-neutral-800 rounded-t-2xl shadow-2xl z-30 flex flex-col pt-2 pb-8 px-3 max-h-[60vh]"
             >
-              <div className="w-12 h-1.5 bg-neutral-200 dark:bg-neutral-800 rounded-full mx-auto mb-6" />
-              <div className="space-y-4">
-                 <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-500 px-2">More Options</h3>
-                 <div className="grid grid-cols-2 gap-2">
-                    {navItems.slice(4).map((item) => (
-                      <button
-                        key={item.id}
-                        onClick={() => {
-                          setCurrentView(item.id);
-                          setIsMobileMenuOpen(false);
-                        }}
-                        className={cn(
-                          "flex items-center gap-3 p-4 rounded-2xl transition-colors text-left",
-                          currentView === item.id 
-                            ? "bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900" 
-                            : "bg-neutral-50 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300"
-                        )}
-                      >
-                         <item.icon className="w-5 h-5 shrink-0" />
-                         <span className="font-medium text-sm">{item.label}</span>
-                      </button>
-                    ))}
-                 </div>
+              <div className="w-10 h-1 bg-neutral-300 dark:bg-neutral-700 rounded-full mx-auto mb-5" />
+              <div className="grid grid-cols-2 gap-2">
+                {navItems.slice(4).map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => {
+                      setCurrentView(item.id);
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className={cn(
+                      "flex flex-col items-center gap-2 p-4 rounded-xl transition-colors",
+                      currentView === item.id
+                        ? "bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900"
+                        : "bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 active:bg-neutral-200 dark:active:bg-neutral-700"
+                    )}
+                  >
+                    <item.icon className="w-6 h-6" />
+                    <span className="text-xs font-medium">{item.label}</span>
+                  </button>
+                ))}
               </div>
             </motion.div>
           </>
         )}
       </AnimatePresence>
 
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white/90 dark:bg-neutral-900/90 backdrop-blur-xl border-t border-neutral-200/50 dark:border-neutral-800/50 flex items-center justify-around px-1 z-40 pb-safe shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.1)]">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white/90 dark:bg-neutral-900/90 backdrop-blur-xl border-t border-neutral-200/50 dark:border-neutral-800/50 flex items-center justify-around z-40 pb-safe shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.1)]">
         {navItems.slice(0, 4).map(item => (
           <button
             key={item.id}
@@ -223,37 +218,35 @@ const AppContent = () => {
               setIsMobileMenuOpen(false);
             }}
             className={cn(
-              "flex flex-col items-center justify-center w-full h-full space-y-1 transition-colors",
+              "flex flex-col items-center justify-center w-full h-full gap-0.5 transition-colors",
               currentView === item.id && !isMobileMenuOpen
-                ? "text-neutral-900 dark:text-neutral-100" 
-                : "text-neutral-500 dark:text-neutral-400 hover:text-neutral-700"
+                ? "text-neutral-900 dark:text-neutral-100"
+                : "text-neutral-400 dark:text-neutral-500"
             )}
           >
             <div className={cn(
-               "px-4 py-1 rounded-full transition-all duration-200 mb-0.5",
+               "flex items-center justify-center w-10 h-7 rounded-lg transition-colors",
                currentView === item.id && !isMobileMenuOpen ? "bg-neutral-100 dark:bg-neutral-800" : ""
             )}>
-              <item.icon className={cn("w-5 h-5", currentView === item.id && !isMobileMenuOpen ? "text-neutral-900 dark:text-neutral-100" : "")} strokeWidth={currentView === item.id && !isMobileMenuOpen ? 2.5 : 2} />
+              <item.icon className="w-5 h-5" strokeWidth={currentView === item.id ? 2.5 : 1.5} />
             </div>
-            <span className={cn("text-[10px] tracking-wide", currentView === item.id && !isMobileMenuOpen ? "font-semibold" : "font-medium")}>{item.label}</span>
+            <span className="text-[10px] font-medium leading-none">{item.label}</span>
           </button>
         ))}
         <button
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
           className={cn(
-            "flex flex-col items-center justify-center w-full h-full space-y-1 transition-colors relative z-50",
-            isMobileMenuOpen 
-              ? "text-neutral-900 dark:text-neutral-100" 
-              : "text-neutral-500 dark:text-neutral-400"
+            "flex flex-col items-center justify-center w-full h-full gap-0.5 transition-colors",
+            isMobileMenuOpen ? "text-neutral-900 dark:text-neutral-100" : "text-neutral-400 dark:text-neutral-500"
           )}
         >
           <div className={cn(
-               "px-4 py-1 rounded-full transition-all duration-200 mb-0.5",
+               "flex items-center justify-center w-10 h-7 rounded-lg transition-colors",
                isMobileMenuOpen ? "bg-neutral-100 dark:bg-neutral-800" : ""
             )}>
-            <Menu className={cn("w-5 h-5", isMobileMenuOpen ? "text-neutral-900 dark:text-neutral-100" : "")} strokeWidth={isMobileMenuOpen ? 2.5 : 2} />
+            <Menu className="w-5 h-5" strokeWidth={isMobileMenuOpen ? 2.5 : 1.5} />
           </div>
-          <span className={cn("text-[10px] tracking-wide", isMobileMenuOpen ? "font-semibold" : "font-medium")}>Menu</span>
+          <span className="text-[10px] font-medium leading-none">More</span>
         </button>
       </nav>
       <BuJoDock />

@@ -105,7 +105,7 @@ export const GlobalSearch = ({ isOpen, onClose, onNavigate }: GlobalSearchProps)
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[10vh] sm:pt-[20vh] px-4">
+        <div className="fixed inset-0 z-[100] flex items-start justify-center sm:pt-[20vh]">
           <motion.div 
             initial={{ opacity: 0 }} 
             animate={{ opacity: 1 }} 
@@ -118,9 +118,9 @@ export const GlobalSearch = ({ isOpen, onClose, onNavigate }: GlobalSearchProps)
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: -20 }}
             transition={{ duration: 0.2 }}
-            className="bg-white dark:bg-neutral-900 w-full max-w-xl rounded-2xl shadow-2xl border border-neutral-200 dark:border-neutral-800 overflow-hidden relative z-10 flex flex-col max-h-[80vh]"
+            className="bg-white dark:bg-neutral-900 w-full sm:max-w-xl sm:rounded-2xl sm:shadow-2xl sm:border sm:border-neutral-200 sm:dark:border-neutral-800 sm:max-h-[80vh] overflow-hidden relative z-10 flex flex-col h-full sm:h-auto"
           >
-            <div className="flex items-center px-4 py-3 border-b border-neutral-100 dark:border-neutral-800">
+            <div className="flex items-center px-4 h-14 border-b border-neutral-100 dark:border-neutral-800 shrink-0">
               <SearchIcon className="w-5 h-5 text-neutral-400 shrink-0" />
               <input
                 ref={inputRef}
@@ -131,13 +131,13 @@ export const GlobalSearch = ({ isOpen, onClose, onNavigate }: GlobalSearchProps)
               />
               <button 
                 onClick={onClose}
-                className="p-1 rounded-md text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+                className="w-8 h-8 flex items-center justify-center rounded-full text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto w-full custom-scrollbar">
+            <div className="flex-1 overflow-y-auto w-full custom-scrollbar sm:max-h-[60vh]">
                {query.trim().length === 0 ? (
                  <div className="py-12 px-6 flex flex-col items-center justify-center text-center text-neutral-500 dark:text-neutral-400">
                    <div className="w-12 h-12 bg-neutral-50 dark:bg-neutral-800/50 rounded-full flex items-center justify-center mb-4">
@@ -182,10 +182,8 @@ export const GlobalSearch = ({ isOpen, onClose, onNavigate }: GlobalSearchProps)
                )}
             </div>
             
-            <div className="px-4 py-3 border-t border-neutral-100 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/50 text-xs flex justify-between text-neutral-400 font-medium">
-               <div className="flex gap-4">
-                  <span>esc to dismiss</span>
-               </div>
+            <div className="hidden sm:flex px-4 py-3 border-t border-neutral-100 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/50 text-xs text-neutral-400 font-medium">
+               <span>esc to dismiss</span>
             </div>
           </motion.div>
         </div>

@@ -179,9 +179,9 @@ export const BuJoDock: React.FC<BuJoDockProps> = ({ className, isMobile }) => {
 
   return (
     <div className={cn(
-      isMobile 
-        ? "flex items-center" 
-        : "fixed bottom-24 md:bottom-8 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center hidden md:flex",
+      isMobile
+        ? "fixed bottom-20 right-4 z-50"
+        : "fixed bottom-8 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center hidden md:flex",
       className
     )}>
        
@@ -209,8 +209,8 @@ export const BuJoDock: React.FC<BuJoDockProps> = ({ className, isMobile }) => {
       <motion.div 
         layout
         className={cn(
-          "bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-full overflow-hidden flex items-center transition-all duration-300",
-          expanded && !isMobile ? "w-[90vw] md:w-[480px] p-1.5 shadow-[0_8px_30px_rgb(0,0,0,0.12)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.5)]" : expanded && isMobile ? "fixed top-[64px] left-2 right-2 z-[100] p-1.5 w-auto shadow-2xl" : "w-auto px-1 py-1 shadow-[0_8px_30px_rgb(0,0,0,0.12)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.5)]",
+          "bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 overflow-hidden flex items-center transition-all duration-300",
+          expanded && !isMobile ? "w-[90vw] md:w-[480px] p-1.5 rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.12)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.5)]" : expanded && isMobile ? "fixed bottom-32 left-4 right-4 z-[100] p-2 rounded-2xl shadow-2xl" : "w-auto px-1 py-1 rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.12)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.5)]",
           !expanded && isMobile ? "shadow-none border-none bg-transparent dark:bg-transparent" : ""
         )}
       >
@@ -223,13 +223,13 @@ export const BuJoDock: React.FC<BuJoDockProps> = ({ className, isMobile }) => {
               exit={{ opacity: 0, scale: 0.8 }}
               onClick={() => setExpanded(true)}
               className={cn(
-                "flex items-center group transition-colors",
-                isMobile 
-                  ? "p-2 bg-neutral-100 dark:bg-neutral-800 rounded-full hover:bg-neutral-200 dark:hover:bg-neutral-700"
+                "flex items-center group transition-all active:scale-90",
+                isMobile
+                  ? "w-12 h-12 bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 rounded-2xl shadow-lg justify-center"
                   : "gap-2.5 px-4 py-2.5 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-full"
               )}
             >
-              <Sparkles className={cn("transition-colors", isMobile ? "w-4 h-4 text-neutral-500 group-hover:text-amber-500" : "w-5 h-5 text-neutral-500 group-hover:text-amber-500")} />
+              <Sparkles className={cn("transition-colors", isMobile ? "w-5 h-5" : "w-5 h-5 text-neutral-500 group-hover:text-amber-500")} />
               {!isMobile && <span className="font-serif font-medium text-neutral-700 dark:text-neutral-300 mr-1">Ask BuJo</span>}
               {!isMobile && <span className="text-[10px] bg-neutral-100 dark:bg-neutral-800 text-neutral-400 px-1.5 py-0.5 rounded border border-neutral-200 dark:border-neutral-700">⌘⇧K</span>}
             </motion.button>
