@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: bujoapp
+    runtime: image
+    repo: https://github.com/0Pxyz/bujoapp
+    dockerfilePath: Dockerfile
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: GEMINI_API_KEY
+        sync: false
+    healthCheckPath: /
