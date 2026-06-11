@@ -23,5 +23,4 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     path
   }
   console.error('Firestore Error:', errInfo);
-  throw new Error(errInfo.error);
 }

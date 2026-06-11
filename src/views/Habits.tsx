@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { useBuJo } from '../store/BuJoContext';
 import { format, subDays, startOfWeek, addDays } from 'date-fns';
-import { Plus, X, Flame, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, X, Flame, ChevronLeft, ChevronRight, Target } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '../lib/utils';
-import { HabitFrequencyType } from '../types';
+import { HabitFrequencyType, Habit } from '../types';
 
 const Dot = ({ done, future, onClick }: { done: boolean; future: boolean; onClick: () => void }) => (
   <button disabled={future} onClick={onClick}
@@ -26,16 +26,37 @@ export const Habits = () => {
   const weekStart = addDays(startOfWeek(today, { weekStartsOn: 1 }), weekOffset * 7);
   const weekDays = Array.from({ length: 7 }).map((_, i) => addDays(weekStart, i));
 
-  const getStreak = (id: string) => {
+  const getStreak = (habit: Habit) => {
     let s = 0, d = new Date();
-    while (true) {
-      const log = habitLogs.find(l => l.habitId === id && l.date === format(d, 'yyyy-MM-dd'));
-      if (log?.completed) { s++; d = subDays(d, 1); }
-      else if (format(d, 'yyyy-MM-dd') !== format(new Date(), 'yyyy-MM-dd')) break;
-      else d = subDays(d, 1);
-      if (s > 365) break;
+    const selectedDays = habit.specificDays || [];
+
+    while (s <= 365) {
+      const ds = format(d, 'yyyy-MM-dd');
+      const log = habitLogs.find(l => l.habitId === habit.id && l.date === ds);
+
+      if (habit.frequencyType === 'specific_days' && selectedDays.length > 0) {
+        const dayOfWeek = d.getDay();
+        if (!selectedDays.includes(dayOfWeek)) {
+          d = subDays(d, 1);
+          continue;
+        }
+        if (log?.completed) { s++; d = subDays(d, 1); }
+        else break;
+      } else {
+        if (log?.completed) { s++; d = subDays(d, 1); }
+        else if (ds === format(new Date(), 'yyyy-MM-dd')) { d = subDays(d, 1); continue; }
+        else break;
+      }
     }
     return s;
+  };
+
+  const getWeekCount = (habit: Habit) => {
+    const logsThisWeek = weekDays.filter(d => {
+      const log = habitLogs.find(l => l.habitId === habit.id && l.date === format(d, 'yyyy-MM-dd'));
+      return log?.completed;
+    });
+    return logsThisWeek.length;
   };
 
   const handleAdd = (e: React.FormEvent) => {
@@ -121,17 +142,25 @@ export const Habits = () => {
 
           <div className="space-y-2">
             {habits.map(habit => {
-              const streak = getStreak(habit.id);
+              const streak = getStreak(habit);
+              const isInterval = habit.frequencyType === 'interval';
+              const weekCount = isInterval ? getWeekCount(habit) : 0;
+              const weekTarget = habit.timesPerWeek || 0;
               return (
                 <div key={habit.id} className="bg-white dark:bg-neutral-900 border border-neutral-100 dark:border-neutral-800 rounded-xl p-3 shadow-sm">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2 min-w-0">
-                      {streak > 0 && (
+                      {isInterval && weekTarget > 0 ? (
+                        <div className="flex items-center gap-1 text-violet-500 shrink-0 text-xs font-bold">
+                          <Target className="w-3.5 h-3.5" />
+                          <span>{weekCount}/{weekTarget}</span>
+                        </div>
+                      ) : streak > 0 ? (
                         <div className="flex items-center gap-0.5 text-orange-500 shrink-0">
                           <Flame className="w-3.5 h-3.5" />
                           <span className="text-xs font-bold">{streak}</span>
                         </div>
-                      )}
+                      ) : null}
                       <span className="text-sm font-medium text-neutral-800 dark:text-neutral-200 truncate">{habit.name}</span>
                     </div>
                     <button onClick={() => deleteHabit(habit.id)} className="p-1 text-neutral-400 hover:text-red-500 active:scale-90 transition-transform">
