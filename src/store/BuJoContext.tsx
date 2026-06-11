@@ -8,6 +8,7 @@ import { collection, doc, setDoc, deleteDoc, updateDoc, onSnapshot, writeBatch }
 interface BuJoContextType extends AppState {
   user: User | null;
   isLoadingAuth: boolean;
+  firestoreError: string | null;
   addEntry: (
     text: string, 
     type: BulletType, 
@@ -45,6 +46,12 @@ const defaultSettings: AppSettings = {
 export const BuJoProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
+  const [firestoreError, setFirestoreError] = useState<string | null>(null);
+
+  const showError = (msg: string) => {
+    setFirestoreError(msg);
+    setTimeout(() => setFirestoreError(null), 6000);
+  };
 
   const [state, setState] = useState<AppState>({
     entries: [], collections: [], habits: [], habitLogs: [], settings: defaultSettings
@@ -123,35 +130,35 @@ export const BuJoProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
     try {
       await setDoc(doc(db, 'users', user.uid, 'entries', id), newEntry);
-    } catch (e) { handleFirestoreError(e, OperationType.CREATE, 'entries'); }
+    } catch (e) { handleFirestoreError(e, OperationType.CREATE, 'entries'); showError('Failed to save entry.'); }
   };
 
   const updateEntryState = async (id: string, taskState: TaskState) => {
     if (!user) return;
     try {
       await updateDoc(doc(db, 'users', user.uid, 'entries', id), { state: taskState, updatedAt: new Date().toISOString() });
-    } catch (e) { handleFirestoreError(e, OperationType.UPDATE, 'entries'); }
+    } catch (e) { handleFirestoreError(e, OperationType.UPDATE, 'entries'); showError('Failed to update entry.'); }
   };
 
   const updateEntrySignifier = async (id: string, signifiers: { priority: boolean; idea: boolean; explore: boolean }) => {
     if (!user) return;
     try {
       await updateDoc(doc(db, 'users', user.uid, 'entries', id), { signifiers, updatedAt: new Date().toISOString() });
-    } catch (e) { handleFirestoreError(e, OperationType.UPDATE, 'entries'); }
+    } catch (e) { handleFirestoreError(e, OperationType.UPDATE, 'entries'); showError('Failed to update entry.'); }
   };
 
   const updateEntryText = async (id: string, text: string) => {
     if (!user) return;
     try {
       await updateDoc(doc(db, 'users', user.uid, 'entries', id), { text, updatedAt: new Date().toISOString() });
-    } catch (e) { handleFirestoreError(e, OperationType.UPDATE, 'entries'); }
+    } catch (e) { handleFirestoreError(e, OperationType.UPDATE, 'entries'); showError('Failed to update entry.'); }
   };
 
   const deleteEntry = async (id: string) => {
     if (!user) return;
     try {
       await deleteDoc(doc(db, 'users', user.uid, 'entries', id));
-    } catch (e) { handleFirestoreError(e, OperationType.DELETE, 'entries'); }
+    } catch (e) { handleFirestoreError(e, OperationType.DELETE, 'entries'); showError('Failed to delete entry.'); }
   };
 
   const migrateEntry = async (id: string, newDate: string, newLogType: LogType) => {
@@ -181,7 +188,7 @@ export const BuJoProvider: React.FC<{ children: React.ReactNode }> = ({ children
       batch.set(doc(db, 'users', user.uid, 'entries', newEntryId), newEntry);
       
       await batch.commit();
-    } catch (e) { handleFirestoreError(e, OperationType.UPDATE, 'entries'); }
+    } catch (e) { handleFirestoreError(e, OperationType.UPDATE, 'entries'); showError('Failed to migrate entry.'); }
   };
 
   const createCollection = async (title: string) => {
@@ -190,7 +197,7 @@ export const BuJoProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const newCollection: Collection = { id, title, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
     try {
       await setDoc(doc(db, 'users', user.uid, 'collections', id), newCollection);
-    } catch (e) { handleFirestoreError(e, OperationType.CREATE, 'collections'); }
+    } catch (e) { handleFirestoreError(e, OperationType.CREATE, 'collections'); showError('Failed to create collection.'); }
     return id;
   };
 
@@ -204,7 +211,7 @@ export const BuJoProvider: React.FC<{ children: React.ReactNode }> = ({ children
         batch.delete(doc(db, 'users', user.uid, 'entries', entry.id));
       });
       await batch.commit();
-    } catch (e) { handleFirestoreError(e, OperationType.DELETE, 'collections'); }
+    } catch (e) { handleFirestoreError(e, OperationType.DELETE, 'collections'); showError('Failed to delete collection.'); }
   }
 
   const reorderEntries = async (reorderedIds: string[]) => {
@@ -215,7 +222,7 @@ export const BuJoProvider: React.FC<{ children: React.ReactNode }> = ({ children
         batch.update(doc(db, 'users', user.uid, 'entries', id), { order: index, updatedAt: new Date().toISOString() });
       });
       await batch.commit();
-    } catch (e) { handleFirestoreError(e, OperationType.UPDATE, 'entries'); }
+    } catch (e) { handleFirestoreError(e, OperationType.UPDATE, 'entries'); showError('Failed to reorder entries.'); }
   };
 
   const performMonthlyMigration = async (entriesToMigrate: string[], newLogDate: string, entriesToCancel: string[]) => {
@@ -247,7 +254,7 @@ export const BuJoProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       await batch.commit();
-    } catch (e) { handleFirestoreError(e, OperationType.UPDATE, 'entries'); }
+    } catch (e) { handleFirestoreError(e, OperationType.UPDATE, 'entries'); showError('Failed to migrate entries.'); }
   };
 
   const addHabit = async (name: string, frequencyType: 'daily' | 'specific_days' | 'interval' = 'daily', specificDays: number[] = [], timesPerWeek: number = 3) => {
@@ -256,7 +263,7 @@ export const BuJoProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const newHabit: Habit = { id, name, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), frequencyType, specificDays, timesPerWeek };
     try {
       await setDoc(doc(db, 'users', user.uid, 'habits', id), newHabit);
-    } catch (e) { handleFirestoreError(e, OperationType.CREATE, 'habits'); }
+    } catch (e) { handleFirestoreError(e, OperationType.CREATE, 'habits'); showError('Failed to create habit.'); }
   };
 
   const deleteHabit = async (id: string) => {
@@ -267,7 +274,7 @@ export const BuJoProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const logs = state.habitLogs.filter(l => l.habitId === id);
       logs.forEach(log => batch.delete(doc(db, 'users', user.uid, 'habitLogs', log.id)));
       await batch.commit();
-    } catch (e) { handleFirestoreError(e, OperationType.DELETE, 'habits'); }
+    } catch (e) { handleFirestoreError(e, OperationType.DELETE, 'habits'); showError('Failed to delete habit.'); }
   };
 
   const toggleHabit = async (habitId: string, date: string) => {
@@ -281,12 +288,11 @@ export const BuJoProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const newLog: HabitLog = { id, habitId, date, completed: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
         await setDoc(doc(db, 'users', user.uid, 'habitLogs', id), newLog);
       }
-    } catch (e) { handleFirestoreError(e, OperationType.WRITE, 'habitLogs'); }
+    } catch (e) { handleFirestoreError(e, OperationType.WRITE, 'habitLogs'); showError('Failed to update habit.'); }
   };
 
   const updateSettings = async (newSettings: Partial<AppSettings>) => {
     if (!user) return;
-    // Strip openrouterApiKey before saving to Firestore — stored in localStorage instead
     const sanitized = JSON.parse(JSON.stringify(newSettings));
     if (sanitized.ai?.openrouterApiKey) {
       localStorage.setItem('openrouterApiKey', sanitized.ai.openrouterApiKey);
@@ -295,11 +301,11 @@ export const BuJoProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const updated = { ...state.settings, ...sanitized };
     try {
       await setDoc(doc(db, 'users', user.uid, 'settings', 'default'), updated, { merge: true });
-    } catch (e) { handleFirestoreError(e, OperationType.UPDATE, 'settings'); }
+    } catch (e) { handleFirestoreError(e, OperationType.UPDATE, 'settings'); showError('Failed to save settings.'); }
   };
 
   return (
-    <BuJoContext.Provider value={{ ...state, user, isLoadingAuth, addEntry, updateEntryState, updateEntrySignifier, updateEntryText, deleteEntry, migrateEntry, createCollection, deleteCollection, performMonthlyMigration, reorderEntries, addHabit, deleteHabit, toggleHabit, updateSettings }}>
+    <BuJoContext.Provider value={{ ...state, user, isLoadingAuth, firestoreError, addEntry, updateEntryState, updateEntrySignifier, updateEntryText, deleteEntry, migrateEntry, createCollection, deleteCollection, performMonthlyMigration, reorderEntries, addHabit, deleteHabit, toggleHabit, updateSettings }}>
       {children}
     </BuJoContext.Provider>
   );

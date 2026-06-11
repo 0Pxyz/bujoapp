@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useBuJo } from '../store/BuJoContext';
 import { format } from 'date-fns';
 import { Sparkles, Mic, Type, ArrowUp, Loader2, Play } from 'lucide-react';
@@ -38,7 +38,7 @@ function useIsMobile() {
 
 export const BuJoDock: React.FC<BuJoDockProps> = ({ className, isMobile: propMobile }) => {
   const isMobile = propMobile ?? useIsMobile();
-  const { collections, createCollection, addEntry, addHabit, settings } = useBuJo();
+  const { collections, createCollection, addEntry, addHabit, settings, firestoreError } = useBuJo();
   const [expanded, setExpanded] = useState(false);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
@@ -294,22 +294,25 @@ export const BuJoDock: React.FC<BuJoDockProps> = ({ className, isMobile: propMob
     )}>
        
       <AnimatePresence>
-        {(replyText || loading) && (
+        {(replyText || loading || firestoreError) && (
           <motion.div 
             initial={{ opacity: 0, y: isMobile ? -10 : 10, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: isMobile ? -10 : 10, scale: 0.95 }}
             className={cn(
-              "mb-4 bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 rounded-2xl px-5 py-3 shadow-xl w-full flex items-center gap-3 text-sm font-medium z-[100]",
+              "mb-4 rounded-2xl px-5 py-3 shadow-xl w-full flex items-center gap-3 text-sm font-medium z-[100]",
+              firestoreError
+                ? "bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800"
+                : "bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900",
               isMobile ? "fixed top-16 left-4 right-4 max-w-none" : "max-w-sm mx-4"
             )}
           >
             {loading ? (
                <Loader2 className="w-5 h-5 animate-spin" />
             ) : (
-               <Sparkles className="w-5 h-5 shrink-0 text-amber-300 dark:text-amber-600" />
+               <Sparkles className={cn("w-5 h-5 shrink-0", firestoreError ? "text-red-400" : "text-amber-300 dark:text-amber-600")} />
             )}
-            <p className="flex-1 leading-relaxed">{loading ? "Thinking..." : replyText}</p>
+            <p className="flex-1 leading-relaxed">{loading ? "Thinking..." : firestoreError || replyText}</p>
           </motion.div>
         )}
       </AnimatePresence>
