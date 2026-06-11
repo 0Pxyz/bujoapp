@@ -20,7 +20,8 @@ interface ActionParam {
 }
 
 interface ApiResponse {
-  reply: string;
+  reply?: string;
+  response?: string;
   actions: ActionParam[];
 }
 
@@ -91,11 +92,32 @@ export const BuJoDock: React.FC<BuJoDockProps> = ({ className, isMobile: propMob
       const data: ApiResponse = await res.json();
       
       console.log('[BuJoDock] AI response:', JSON.stringify(data));
+
+      // Normalize actions: handle nested entry format (e.g. { actionType: "log_entry", entry: { type, content } })
+      const actions: ActionParam[] = (data.actions || []).map(a => {
+        const rawActionType = (a as any).actionType;
+        if ((a as any).entry && !a.text) {
+          const e = (a as any).entry;
+          return {
+            actionType: rawActionType === 'log_entry' ? 'add_entry' : rawActionType,
+            text: e.content || e.text,
+            entryType: e.type,
+            date: e.date,
+            signifier: e.signifier || 'none',
+            logType: e.logType,
+            targetCollectionRef: a.targetCollectionRef,
+            targetCollectionTitle: a.targetCollectionTitle,
+            collectionTitle: a.collectionTitle || e.collectionTitle,
+            collectionIdRef: a.collectionIdRef,
+          } as ActionParam;
+        }
+        return a as ActionParam;
+      });
       
-      if (data.actions && data.actions.length > 0) {
+      if (actions.length > 0) {
         const idMap = new Map<string, string>();
 
-        for (const action of data.actions) {
+        for (const action of actions) {
           console.log('[BuJoDock] processing action:', JSON.stringify(action));
           if (action.actionType === "create_collection" && action.collectionTitle) {
              const existing = collections.find(c => c.title.toLowerCase() === action.collectionTitle?.toLowerCase());
@@ -110,7 +132,7 @@ export const BuJoDock: React.FC<BuJoDockProps> = ({ className, isMobile: propMob
           }
         }
 
-        for (const action of data.actions) {
+        for (const action of actions) {
           if (action.actionType === "add_entry" && action.text) {
              const date = action.date || format(new Date(), 'yyyy-MM-dd');
              let logType = action.logType || 'daily';
@@ -136,10 +158,10 @@ export const BuJoDock: React.FC<BuJoDockProps> = ({ className, isMobile: propMob
           }
         }
       } else {
-        console.log('[BuJoDock] no actions to process, reply:', data.reply);
+        console.log('[BuJoDock] no actions to process, reply:', data.reply || data.response);
       }
 
-      setReplyText(data.reply);
+      setReplyText(data.reply || data.response || '');
 
     } catch (err) {
        setReplyText("Oops, couldn't reach the BuJo assistant. Try again.");
