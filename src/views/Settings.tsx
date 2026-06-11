@@ -3,7 +3,7 @@ import { useBuJo } from '../store/BuJoContext';
 import { motion } from 'framer-motion';
 import { Settings2, Download, Upload, LogOut } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { Theme, FontSize, FontFamily, StartOfWeek, AIAssistance, LayoutDensity } from '../types';
+import { Theme, FontSize, FontFamily, StartOfWeek, AIAssistance, LayoutDensity, AiProvider } from '../types';
 
 const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
   <section>
@@ -167,6 +167,44 @@ export const Settings = () => {
                 </label>
               ))}
             </div>
+          </div>
+        </div>
+
+        <div className="mt-6 pt-6 border-t border-neutral-200 dark:border-neutral-800">
+          <p className="font-medium mb-3 text-neutral-900 dark:text-neutral-100">AI Provider</p>
+          <div className="space-y-4 text-sm">
+            <div className="flex gap-2">
+              {(['gemini', 'openrouter'] as AiProvider[]).map(p => (
+                <button key={p} onClick={() => T({ ai: { ...settings.ai, provider: p } as any })}
+                  className={cn("px-4 py-2 rounded-lg border font-medium capitalize transition-all",
+                    (settings.ai?.provider || 'gemini') === p
+                      ? "bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900 border-transparent"
+                      : "border-neutral-200 dark:border-neutral-700 text-neutral-600 dark:text-neutral-400")}>{p}</button>
+              ))}
+            </div>
+
+            {(settings.ai?.provider || 'gemini') === 'openrouter' && (
+              <div className="space-y-3 pl-1">
+                <div>
+                  <label className="block text-xs font-medium text-neutral-500 mb-1.5">API Key</label>
+                  <input type="password" value={settings.ai?.openrouterApiKey || ''}
+                    onChange={e => T({ ai: { ...settings.ai, openrouterApiKey: e.target.value } as any })}
+                    placeholder="sk-or-v1-..."
+                    className="w-full bg-neutral-100 dark:bg-neutral-800/50 border-none rounded-lg py-2 px-3 text-sm font-mono placeholder:text-neutral-400" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-neutral-500 mb-1.5">Model</label>
+                  <input type="text" value={settings.ai?.openrouterModel || ''}
+                    onChange={e => T({ ai: { ...settings.ai, openrouterModel: e.target.value } as any })}
+                    placeholder="google/gemini-2.5-flash (or any OpenRouter model)"
+                    className="w-full bg-neutral-100 dark:bg-neutral-800/50 border-none rounded-lg py-2 px-3 text-sm placeholder:text-neutral-400" />
+                </div>
+                <p className="text-xs text-neutral-400 leading-relaxed">
+                  Find models at <span className="text-neutral-500 underline underline-offset-2 cursor-default">openrouter.ai/models</span>.
+                  Your key is stored in your settings and sent only to the server with each request.
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </Section>

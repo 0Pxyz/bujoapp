@@ -54,6 +54,7 @@ export type FontSize = 'small' | 'medium' | 'large';
 export type FontFamily = 'serif' | 'sans';
 export type StartOfWeek = 'sunday' | 'monday';
 export type AIAssistance = 'off' | 'suggestions' | 'active';
+export type AiProvider = 'gemini' | 'openrouter';
 export type LayoutDensity = 'comfortable' | 'compact';
 
 export interface AppSettings {
@@ -78,6 +79,9 @@ export interface AppSettings {
     dailyReview: boolean;
     weeklyReview: boolean;
     monthlyReview: boolean;
+    provider?: AiProvider;
+    openrouterModel?: string;
+    openrouterApiKey?: string;
   };
   syncEnabled?: boolean;
   shortcuts?: {

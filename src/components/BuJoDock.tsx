@@ -4,18 +4,19 @@ import { format } from 'date-fns';
 import { Sparkles, Mic, Type, ArrowUp, Loader2, Play } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '../lib/utils';
-import { BulletType, LogType } from '../types';
+import { LogType } from '../types';
 
 interface ActionParam {
   actionType: "create_collection" | "add_entry" | "insights";
   collectionTitle?: string;
   collectionIdRef?: string;
   text?: string;
-  entryType?: BulletType;
+  entryType?: string;
   logType?: LogType;
   signifier?: string;
   date?: string;
   targetCollectionRef?: string;
+  targetCollectionTitle?: string;
 }
 
 interface ApiResponse {
@@ -36,7 +37,7 @@ function useIsMobile() {
 
 export const BuJoDock: React.FC<BuJoDockProps> = ({ className, isMobile: propMobile }) => {
   const isMobile = propMobile ?? useIsMobile();
-  const { collections, createCollection, addEntry } = useBuJo();
+  const { collections, createCollection, addEntry, settings } = useBuJo();
   const [expanded, setExpanded] = useState(false);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
@@ -71,12 +72,17 @@ export const BuJoDock: React.FC<BuJoDockProps> = ({ className, isMobile: propMob
     setExpanded(false);
 
     try {
+      const ai = settings.ai;
       const res = await fetch("/api/bujo", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           text: textToSend,
-          currentDate: format(new Date(), 'yyyy-MM-dd')
+          currentDate: format(new Date(), 'yyyy-MM-dd'),
+          provider: ai?.provider,
+          openrouterApiKey: ai?.openrouterApiKey,
+          openrouterModel: ai?.openrouterModel,
+          existingCollections: collections.map(c => c.title),
         })
       });
 
@@ -106,11 +112,14 @@ export const BuJoDock: React.FC<BuJoDockProps> = ({ className, isMobile: propMob
              let cid: string | undefined = undefined;
              if (action.targetCollectionRef) {
                cid = idMap.get(action.targetCollectionRef);
+             } else if (action.targetCollectionTitle) {
+               const match = collections.find(c => c.title.toLowerCase() === action.targetCollectionTitle?.toLowerCase());
+               cid = match?.id;
              }
 
              const date = action.date || format(new Date(), 'yyyy-MM-dd');
              const logType = action.logType || 'daily';
-             const type = action.entryType || 'task';
+             const type = (action.entryType as string) === 'habit' ? 'note' : (action.entryType || 'task');
              const signifiers = { priority: action.signifier === 'priority', idea: action.signifier === 'idea' || action.signifier === 'inspiration', explore: action.signifier === 'explore' };
 
              addEntry(action.text, type, logType, date, signifiers, cid);

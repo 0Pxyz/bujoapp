@@ -5,7 +5,7 @@ import { CheckCircle2, TrendingUp, Lightbulb, Check, Sparkles, Loader2 } from 'l
 import { motion } from 'framer-motion';
 
 export const Insights = () => {
-  const { entries, habitLogs, habits } = useBuJo();
+  const { entries, habitLogs, habits, settings } = useBuJo();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [aiReview, setAiReview] = useState<string | null>(null);
   const [loadingReview, setLoadingReview] = useState(false);
@@ -38,10 +38,17 @@ export const Insights = () => {
   const fetchAiReview = async () => {
     setLoadingReview(true);
     try {
+      const ai = settings.ai;
       const res = await fetch("/api/review", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ stats, monthFormat })
+        body: JSON.stringify({
+          stats,
+          monthFormat,
+          provider: ai?.provider,
+          openrouterApiKey: ai?.openrouterApiKey,
+          openrouterModel: ai?.openrouterModel,
+        })
       });
       const data = await res.json();
       setAiReview(data.review);
