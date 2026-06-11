@@ -16,7 +16,7 @@ export interface BuJoEntry {
   updatedAt?: string;
   date: string;
   logType: LogType;
-  collectionId?: string;
+  collectionId: string | null;
   order: number;
 }
 
@@ -80,6 +80,7 @@ export interface AppSettings {
     weeklyReview: boolean;
     monthlyReview: boolean;
     provider?: AiProvider;
+    geminiModel?: string;
     openrouterModel?: string;
     openrouterApiKey?: string;
   };

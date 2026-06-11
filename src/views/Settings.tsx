@@ -14,6 +14,7 @@ const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title
 
 export const Settings = () => {
   const { settings, updateSettings, user } = useBuJo();
+  const [localApiKey, setLocalApiKey] = React.useState(() => localStorage.getItem('openrouterApiKey') || '');
 
   const T = (v: Partial<typeof settings>) => updateSettings(v);
 
@@ -173,22 +174,26 @@ export const Settings = () => {
         <div className="mt-6 pt-6 border-t border-neutral-200 dark:border-neutral-800">
           <p className="font-medium mb-3 text-neutral-900 dark:text-neutral-100">AI Provider</p>
           <div className="space-y-4 text-sm">
-            <div className="flex gap-2">
+            {(() => { const provider = settings.ai?.provider || 'gemini'; return (
+            <><div className="flex gap-2">
               {(['gemini', 'openrouter'] as AiProvider[]).map(p => (
                 <button key={p} onClick={() => T({ ai: { ...settings.ai, provider: p } as any })}
                   className={cn("px-4 py-2 rounded-lg border font-medium capitalize transition-all",
-                    (settings.ai?.provider || 'gemini') === p
+                    provider === p
                       ? "bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900 border-transparent"
                       : "border-neutral-200 dark:border-neutral-700 text-neutral-600 dark:text-neutral-400")}>{p}</button>
               ))}
             </div>
 
-            {(settings.ai?.provider || 'gemini') === 'openrouter' && (
+            {provider === 'openrouter' && (
               <div className="space-y-3 pl-1">
                 <div>
                   <label className="block text-xs font-medium text-neutral-500 mb-1.5">API Key</label>
-                  <input type="password" value={settings.ai?.openrouterApiKey || ''}
-                    onChange={e => T({ ai: { ...settings.ai, openrouterApiKey: e.target.value } as any })}
+                  <input type="password" value={localApiKey}
+                    onChange={e => {
+                      setLocalApiKey(e.target.value);
+                      localStorage.setItem('openrouterApiKey', e.target.value);
+                    }}
                     placeholder="sk-or-v1-..."
                     className="w-full bg-neutral-100 dark:bg-neutral-800/50 border-none rounded-lg py-2 px-3 text-sm font-mono placeholder:text-neutral-400" />
                 </div>
@@ -201,10 +206,31 @@ export const Settings = () => {
                 </div>
                 <p className="text-xs text-neutral-400 leading-relaxed">
                   Find models at <span className="text-neutral-500 underline underline-offset-2 cursor-default">openrouter.ai/models</span>.
-                  Your key is stored in your settings and sent only to the server with each request.
+                  Your key is stored in your browser (localStorage) — never saved to the cloud.
                 </p>
               </div>
             )}
+
+            {provider === 'gemini' && (
+              <div className="space-y-3 pl-1">
+                <div>
+                  <label className="block text-xs font-medium text-neutral-500 mb-1.5">Model</label>
+                  <select value={settings.ai?.geminiModel || 'gemini-2.5-flash'}
+                    onChange={e => T({ ai: { ...settings.ai, geminiModel: e.target.value } as any })}
+                    className="w-full bg-neutral-100 dark:bg-neutral-800/50 border-none rounded-lg py-2 px-3 text-sm">
+                    <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                    <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                    <option value="gemini-3.5-flash">Gemini 3.5 Flash</option>
+                    <option value="gemini-3.1-pro">Gemini 3.1 Pro</option>
+                    <option value="gemini-3-flash">Gemini 3 Flash</option>
+                    <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash-Lite</option>
+                    <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite</option>
+                  </select>
+                </div>
+              </div>
+            )}
+            </>
+          ); })()}
           </div>
         </div>
       </Section>
@@ -232,10 +258,10 @@ export const Settings = () => {
             </button>
           </div>
           <div className="flex gap-3">
-            <button className="flex-1 flex items-center justify-center gap-2 py-3 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded-lg font-medium text-sm transition-colors">
+            <button disabled className="flex-1 flex items-center justify-center gap-2 py-3 bg-neutral-100 dark:bg-neutral-800 rounded-lg font-medium text-sm opacity-50 cursor-not-allowed">
               <Download className="w-4 h-4" /> Export
             </button>
-            <button className="flex-1 flex items-center justify-center gap-2 py-3 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded-lg font-medium text-sm transition-colors">
+            <button disabled className="flex-1 flex items-center justify-center gap-2 py-3 bg-neutral-100 dark:bg-neutral-800 rounded-lg font-medium text-sm opacity-50 cursor-not-allowed">
               <Upload className="w-4 h-4" /> Import
             </button>
           </div>

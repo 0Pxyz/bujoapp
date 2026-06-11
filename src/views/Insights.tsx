@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useBuJo } from '../store/BuJoContext';
-import { format, subMonths, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
+import { format, subMonths } from 'date-fns';
 import { CheckCircle2, TrendingUp, Lightbulb, Check, Sparkles, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -12,8 +12,11 @@ export const Insights = () => {
 
   const monthFormat = format(currentMonth, 'MMMM yyyy');
 
-  const stats = useMemo(() => {
+  useEffect(() => {
     setAiReview(null);
+  }, [currentMonth]);
+
+  const stats = useMemo(() => {
     const monthPrefix = format(currentMonth, 'yyyy-MM');
     const monthEntries = entries.filter(e => e.date.startsWith(monthPrefix));
     
@@ -39,6 +42,7 @@ export const Insights = () => {
     setLoadingReview(true);
     try {
       const ai = settings.ai;
+      const apiKey = localStorage.getItem('openrouterApiKey') || ai?.openrouterApiKey || '';
       const res = await fetch("/api/review", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -46,8 +50,9 @@ export const Insights = () => {
           stats,
           monthFormat,
           provider: ai?.provider,
-          openrouterApiKey: ai?.openrouterApiKey,
+          openrouterApiKey: apiKey,
           openrouterModel: ai?.openrouterModel,
+          geminiModel: ai?.geminiModel,
         })
       });
       const data = await res.json();

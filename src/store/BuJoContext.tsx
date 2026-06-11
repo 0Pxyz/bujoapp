@@ -118,7 +118,7 @@ export const BuJoProvider: React.FC<{ children: React.ReactNode }> = ({ children
       id, type, state: 'open', signifiers, text,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      date, logType, collectionId: collectionId || null as any,
+      date, logType, collectionId: collectionId || null,
       order: state.entries.filter(e => e.date === date && e.logType === logType).length,
     };
     try {
@@ -184,11 +184,13 @@ export const BuJoProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (e) { handleFirestoreError(e, OperationType.UPDATE, 'entries'); }
   };
 
-  const createCollection = (title: string) => {
+  const createCollection = async (title: string) => {
     if (!user) return '';
     const id = generateId();
     const newCollection: Collection = { id, title, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
-    setDoc(doc(db, 'users', user.uid, 'collections', id), newCollection).catch(e => handleFirestoreError(e, OperationType.CREATE, 'collections'));
+    try {
+      await setDoc(doc(db, 'users', user.uid, 'collections', id), newCollection);
+    } catch (e) { handleFirestoreError(e, OperationType.CREATE, 'collections'); }
     return id;
   };
 
@@ -284,7 +286,13 @@ export const BuJoProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateSettings = async (newSettings: Partial<AppSettings>) => {
     if (!user) return;
-    const updated = { ...state.settings, ...newSettings };
+    // Strip openrouterApiKey before saving to Firestore — stored in localStorage instead
+    const sanitized = JSON.parse(JSON.stringify(newSettings));
+    if (sanitized.ai?.openrouterApiKey) {
+      localStorage.setItem('openrouterApiKey', sanitized.ai.openrouterApiKey);
+      delete sanitized.ai.openrouterApiKey;
+    }
+    const updated = { ...state.settings, ...sanitized };
     try {
       await setDoc(doc(db, 'users', user.uid, 'settings', 'default'), updated, { merge: true });
     } catch (e) { handleFirestoreError(e, OperationType.UPDATE, 'settings'); }

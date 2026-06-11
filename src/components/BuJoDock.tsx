@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useBuJo } from '../store/BuJoContext';
 import { format } from 'date-fns';
 import { Sparkles, Mic, Type, ArrowUp, Loader2, Play } from 'lucide-react';
@@ -38,7 +38,7 @@ function useIsMobile() {
 
 export const BuJoDock: React.FC<BuJoDockProps> = ({ className, isMobile: propMobile }) => {
   const isMobile = propMobile ?? useIsMobile();
-  const { collections, createCollection, addEntry, settings } = useBuJo();
+  const { collections, createCollection, addEntry, addHabit, settings } = useBuJo();
   const [expanded, setExpanded] = useState(false);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
@@ -74,6 +74,7 @@ export const BuJoDock: React.FC<BuJoDockProps> = ({ className, isMobile: propMob
 
     try {
       const ai = settings.ai;
+      const apiKey = localStorage.getItem('openrouterApiKey') || ai?.openrouterApiKey || '';
       const res = await fetch("/api/bujo", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -81,8 +82,9 @@ export const BuJoDock: React.FC<BuJoDockProps> = ({ className, isMobile: propMob
           text: textToSend,
           currentDate: format(new Date(), 'yyyy-MM-dd'),
           provider: ai?.provider,
-          openrouterApiKey: ai?.openrouterApiKey,
+          openrouterApiKey: apiKey,
           openrouterModel: ai?.openrouterModel,
+          geminiModel: ai?.geminiModel,
           existingCollections: collections.map(c => c.title),
         })
       });
@@ -93,29 +95,44 @@ export const BuJoDock: React.FC<BuJoDockProps> = ({ className, isMobile: propMob
       
       console.log('[BuJoDock] AI response:', JSON.stringify(data));
 
-      // Normalize actions: handle nested entry format (e.g. { actionType: "log_entry", entry: { type, content } })
+      // Normalize actions: AI models return many different formats
+      const snakeCase = (s: string) => s.replace(/[A-Z]/g, c => '_' + c.toLowerCase()).replace(/^_/, '');
       const actions: ActionParam[] = (data.actions || []).map(a => {
-        const rawActionType = (a as any).actionType;
-        if ((a as any).entry && !a.text) {
-          const e = (a as any).entry;
-          return {
-            actionType: rawActionType === 'log_entry' ? 'add_entry' : rawActionType,
-            text: e.content || e.text,
-            entryType: e.type,
-            date: e.date,
-            signifier: e.signifier || 'none',
-            logType: e.logType,
-            targetCollectionRef: a.targetCollectionRef,
-            targetCollectionTitle: a.targetCollectionTitle,
-            collectionTitle: a.collectionTitle || e.collectionTitle,
-            collectionIdRef: a.collectionIdRef,
-          } as ActionParam;
-        }
-        return a as ActionParam;
+        const raw = a as any;
+        const rawType = raw.actionType;
+        const entry = raw.entry || {};
+
+        const actionType = snakeCase(rawType);
+        const text = entry.content || entry.text || raw.content || raw.text || raw.habitName || entry.habitName;
+        const collectionName = raw.collectionName || entry.collectionName;
+        const targetRef = raw.targetCollectionRef || entry.targetCollectionRef;
+
+        let mappedType = actionType;
+        if (actionType === 'log_entry' || actionType === 'log' || actionType === 'add_to_collection') mappedType = 'add_entry';
+        if (actionType === 'add_habit') mappedType = 'add_entry';
+
+        const entryType = entry.entryType || entry.type || raw.entryType || raw.type
+          || (actionType === 'add_habit' ? 'habit' : undefined);
+
+        const normalized: ActionParam = {
+          actionType: mappedType as ActionParam['actionType'],
+          text,
+          entryType,
+          date: entry.date || raw.date,
+          signifier: entry.signifier || raw.signifier || 'none',
+          logType: raw.logType || entry.logType || (rawType === 'addToCollection' ? 'collection' : 'daily'),
+          targetCollectionRef: targetRef,
+          targetCollectionTitle: raw.targetCollectionTitle || raw.collectionName || entry.targetCollectionTitle,
+          collectionTitle: raw.collectionTitle || raw.collectionName || entry.collectionTitle || entry.collectionName,
+          collectionIdRef: raw.collectionIdRef || entry.collectionIdRef,
+        };
+
+        return normalized;
       });
       
       if (actions.length > 0) {
-        const idMap = new Map<string, string>();
+        // Map from collection ref/name → actual Firestore ID
+        const refToId = new Map<string, string>();
 
         for (const action of actions) {
           console.log('[BuJoDock] processing action:', JSON.stringify(action));
@@ -127,8 +144,30 @@ export const BuJoDock: React.FC<BuJoDockProps> = ({ className, isMobile: propMob
                console.log('[BuJoDock] created collection:', action.collectionTitle, newId);
              }
              if (action.collectionIdRef && newId) {
-               idMap.set(action.collectionIdRef, newId);
+               refToId.set(action.collectionIdRef, newId);
              }
+             // Also store by title so actions can reference by name
+             if (newId) {
+               refToId.set(action.collectionTitle.toLowerCase(), newId);
+             }
+          }
+        }
+
+        // Flatten any nested entries inside create_collection actions into separate add_entry actions
+        for (const action of actions) {
+          const rawType = (action as any).actionType;
+          if ((rawType === "create_collection" || rawType === "createCollection") && Array.isArray((action as any).entries)) {
+            for (const entry of (action as any).entries) {
+              actions.push({
+                actionType: "add_entry",
+                entryType: entry.entryType || "task",
+                text: entry.content || entry.name || entry.text || "",
+                date: (action as any).date || format(new Date(), 'yyyy-MM-dd'),
+                logType: "collection",
+                targetCollectionTitle: action.collectionTitle || (action as any).collectionName,
+                signifier: (action as any).signifier || "none",
+              });
+            }
           }
         }
 
@@ -136,15 +175,34 @@ export const BuJoDock: React.FC<BuJoDockProps> = ({ className, isMobile: propMob
           if (action.actionType === "add_entry" && action.text) {
              const date = action.date || format(new Date(), 'yyyy-MM-dd');
              let logType = action.logType || 'daily';
-             const type = (action.entryType as string) === 'habit' ? 'note' : (action.entryType || 'task');
+             const entryType = action.entryType || 'task';
 
-             let cid: string | undefined = undefined;
-             if (action.targetCollectionRef) {
-               cid = idMap.get(action.targetCollectionRef);
-             } else if (action.targetCollectionTitle) {
-               const match = collections.find(c => c.title.toLowerCase() === action.targetCollectionTitle?.toLowerCase());
-               cid = match?.id;
+             // Habit creation
+             if (entryType === 'habit') {
+               addHabit(action.text);
+               console.log('[BuJoDock] created habit:', action.text);
+               continue;
              }
+
+             const type = entryType as 'task' | 'event' | 'note';
+
+              let cid: string | undefined = undefined;
+              if (action.targetCollectionRef) {
+                cid = refToId.get(action.targetCollectionRef) || refToId.get(action.targetCollectionRef.toLowerCase());
+              }
+              // Check refToId first for newly created collections (not yet in Firestore state)
+              if (!cid && action.targetCollectionTitle) {
+                cid = refToId.get(action.targetCollectionTitle.toLowerCase());
+              }
+              if (!cid && action.targetCollectionTitle) {
+                const match = collections.find(c => c.title.toLowerCase() === action.targetCollectionTitle?.toLowerCase());
+                cid = match?.id;
+              }
+              // If targetCollectionRef looks like a collection name, search existing collections
+              if (!cid && action.targetCollectionRef) {
+                const match = collections.find(c => c.title.toLowerCase() === action.targetCollectionRef.toLowerCase());
+                cid = match?.id;
+              }
 
              // If entry targets a collection but we can't resolve the ID, fall back to daily so it's visible
              if (logType === 'collection' && !cid) {
@@ -251,7 +309,7 @@ export const BuJoDock: React.FC<BuJoDockProps> = ({ className, isMobile: propMob
             ) : (
                <Sparkles className="w-5 h-5 shrink-0 text-amber-300 dark:text-amber-600" />
             )}
-            <p className="flex-1 loading-relaxed">{loading ? "Thinking..." : replyText}</p>
+            <p className="flex-1 leading-relaxed">{loading ? "Thinking..." : replyText}</p>
           </motion.div>
         )}
       </AnimatePresence>

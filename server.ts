@@ -48,7 +48,33 @@ function buildSystemPrompt(currentDate: string, existingCollections?: string[]):
     ? `\nUSER'S EXISTING COLLECTIONS: ${existingCollections.map(c => `"${c}"`).join(", ")}\nPrefer adding to an existing collection over creating a new one when the topic matches closely.`
     : "";
 
-  return `You are an expert Bullet Journal (BuJo) assistant. Your job is to understand what the user is really saying — not just their literal words — and translate it into the correct BuJo structures. Think like a thoughtful journaling coach who also knows the Ryder Carroll method cold.
+  return `You are an expert Bullet Journal (BuJo) assistant integrated into the BuJo app. Your job is to translate user requests into the app's native actions. Think like a thoughtful journaling coach who knows both the Ryder Carroll method AND how this specific app works.
+
+## APP CAPABILITIES
+The app supports these operations via JSON actions. You MUST choose from these exact action types:
+
+### Available action types:
+
+1. **create_collection** — Creates a new themed grouping (project, list, reference).
+   Fields: { "actionType": "create_collection", "collectionTitle": "Name of collection" }
+   Use for: named projects, idea dumps, reading lists, goal plans, area + resource groupings.
+
+2. **add_entry** — Adds a bullet entry to any log or collection.
+   Fields: { "actionType": "add_entry", "entryType": "task"|"event"|"note"|"habit", "text": "...", "date": "YYYY-MM-DD", "logType": "daily"|"monthly"|"future"|"collection", "signifier": "none"|"priority"|"inspiration", "targetCollectionTitle": "Existing collection name (if logType=collection)" }
+   Use for: tasks, events, notes, ideas, reminders in daily/monthly/future logs.
+   For habits: set entryType="habit". This creates a habit in the app's dedicated Habit Tracker system, NOT a collection.
+
+3. **insights** — Request a monthly/periodic review.
+   Fields: { "actionType": "insights" }
+
+### How habits work:
+- The app has a **dedicated Habit Tracker page** separate from collections. Do NOT create a collection for habits.
+- To create a habit, return actionType="add_entry" with entryType="habit" and the habit name as "text".
+- Example: { "actionType": "add_entry", "entryType": "habit", "text": "Exercise daily", "logType": "daily", "date": "2026-06-11" }
+
+### How collections work:
+- Collections are for projects, lists, idea dumps — NOT for habits.
+- If you create a collection AND add entries to it, send SEPARATE actions: one create_collection followed by add_entry actions with logType="collection" and targetCollectionTitle matching the collection title.
 
 ## TEMPORAL CONTEXT
 ${temporalCtx}
@@ -58,13 +84,13 @@ The BuJo system has three log types and collections:
 - **Daily Log**: Rapid logging for the current day or a specific future date. Tasks (•), Events (○), Notes (—). Use for anything concrete happening on a date.
 - **Monthly Log**: Calendar view + task list for the whole month. Use for events with known dates this month, or tasks without a specific day.
 - **Future Log**: Anything beyond the current month. Events, tasks, reminders scheduled for a future month.
-- **Collections**: Thematic groupings — project task lists, idea dumps, reading lists, habit trackers, etc. Created for recurring topics or multi-step goals.
+- **Collections**: Thematic groupings — project task lists, idea dumps, reading lists, etc. Created for recurring topics or multi-step goals.
 
 ## ENTRY TYPES
 - **task**: Something to do (•). Can have sub-tasks. Can be scheduled, delegated, or migrated.
 - **event**: Something that happens at a time/date (○). Record after the fact or schedule ahead.
 - **note**: A thought, observation, fact, or idea (—). Not actionable. Goes in daily log or relevant collection.
-- **habit**: A recurring behaviour the user wants to track. Goes in a Habit Tracker collection.
+- **habit**: A recurring behaviour the user wants to track. Creates in the app's Habit Tracker page.
 
 ## SIGNIFIERS
 - **none**: Default — no special marker.
@@ -108,17 +134,18 @@ The BuJo system has three log types and collections:
 ## ACTION RULES
 1. Parse the user's text carefully for ALL distinct items — don't collapse multiple tasks into one.
 2. For multi-part requests, return multiple actions.
-3. When creating a collection AND adding entries to it in the same response, use collectionIdRef + targetCollectionRef to link them.
+3. When creating a collection AND adding entries to it, send a create_collection action followed by separate add_entry actions with targetCollectionTitle matching the collection title (NOT a reference ID).
 4. Resolve all relative dates to absolute dates (YYYY-MM-DD or YYYY-MM) using the temporal context above.
 5. If the input is ambiguous, choose the most reasonable interpretation and explain it in the reply.
 6. The reply should be warm, brief (1-3 sentences), and confirm what you understood — not a bullet list of what you did.
 7. Never lose information. If in doubt, create a note.
 8. For insights requests ("review", "how am I doing", "monthly review"), return actionType="insights".
-9. **CRITICAL: You MUST return at least one action for any request that involves creating, logging, scheduling, or organizing something. An empty actions array is not acceptable for actionable requests. If the user asks to add a task, create a collection, log an event, etc., you MUST include the corresponding action(s).**
+9. **CRITICAL: You MUST return at least one action for any request that involves creating, logging, scheduling, or organizing something. An empty actions array is not acceptable for actionable requests.**
+10. **CRITICAL: Use the exact action types and field names shown above. "createCollection" or "logEntry" or "addHabit" are NOT valid — use "create_collection" and "add_entry".**
 
 ${collectionsCtx}
 
-IMPORTANT: Return ONLY a valid JSON object. No markdown, no code fences, no explanation outside the JSON.`;
+IMPORTANT: Return ONLY a valid JSON object with "actions" (array) and "response" (string). No markdown, no code fences, no explanation outside the JSON. Use the EXACT field names shown above.`;
 }
 
 function buildReviewPrompt(stats: any, monthFormat: string): string {
@@ -177,7 +204,7 @@ async function callOpenRouter(
 const bujoSchema: Schema = {
   type: Type.OBJECT,
   properties: {
-    reply: {
+    response: {
       type: Type.STRING,
       description: "A warm, concise reply (1-3 sentences) confirming what the AI understood and what it is doing. Should reflect the user's actual intent, not just list actions."
     },
@@ -198,15 +225,6 @@ const bujoSchema: Schema = {
             type: Type.STRING,
             description: "For create_collection: The title of the new collection. Be specific (e.g. 'Marathon Training Plan', not 'Fitness')."
           },
-          collectionType: {
-            type: Type.STRING,
-            enum: ["project", "list", "habit_tracker", "braindump", "reference"],
-            description: "For create_collection: The type of collection. 'project' for multi-step goals, 'list' for simple item lists, 'habit_tracker' for recurring behaviours, 'braindump' for unstructured idea dumps, 'reference' for lookup info."
-          },
-          collectionIdRef: {
-            type: Type.STRING,
-            description: "A temporary reference ID to link entries to this new collection within this response. E.g. 'col_A'. Only used if add_entry actions target this collection."
-          },
 
           // ── add_entry fields ──
           text: {
@@ -216,7 +234,7 @@ const bujoSchema: Schema = {
           entryType: {
             type: Type.STRING,
             enum: ["task", "event", "note", "habit"],
-            description: "For add_entry: The BuJo bullet type."
+            description: "For add_entry: The BuJo bullet type. Use 'habit' for creating a habit in the Habit Tracker."
           },
           logType: {
             type: Type.STRING,
@@ -230,37 +248,44 @@ const bujoSchema: Schema = {
           },
           date: {
             type: Type.STRING,
-            description: "For add_entry: Resolved absolute date. YYYY-MM-DD for daily log entries. YYYY-MM for monthly/future log entries. Omit for collection entries."
+            description: "For add_entry: Resolved absolute date. YYYY-MM-DD for daily log entries. YYYY-MM for monthly/future log entries. Use today's date for habits."
           },
           targetCollectionTitle: {
             type: Type.STRING,
-            description: "For add_entry with logType=collection: The title of the existing collection to add to (must match an existing collection title exactly)."
-          },
-          targetCollectionRef: {
-            type: Type.STRING,
-            description: "For add_entry: If targeting a newly created collection in THIS same response, use the collectionIdRef value here instead of targetCollectionTitle."
-          },
-          subTasks: {
-            type: Type.ARRAY,
-            description: "For add_entry with entryType=task: Optional sub-tasks (nested bullets). Each is a short string.",
-            items: { type: Type.STRING }
-          },
-          time: {
-            type: Type.STRING,
-            description: "For add_entry with entryType=event: The time of the event in HH:MM 24h format, if mentioned by the user."
-          },
-          habitFrequency: {
-            type: Type.STRING,
-            enum: ["daily", "weekly", "weekdays", "weekends", "custom"],
-            description: "For add_entry with entryType=habit: How often the habit repeats."
+            description: "For add_entry with logType=collection: The title of an EXISTING collection to add to. For NEW collections, create_collection will be handled first, then this field matches by title."
           }
         },
         required: ["actionType"]
       }
     }
   },
-  required: ["reply", "actions"]
+  required: ["response", "actions"]
 };
+
+// ─── Rate limiter ──────────────────────────────────────────────────────────────
+
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+function rateLimit(ip: string, maxRequests = 10, windowMs = 60000): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(ip);
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(ip, { count: 1, resetAt: now + windowMs });
+    return true;
+  }
+  if (entry.count >= maxRequests) return false;
+  entry.count++;
+  return true;
+}
+
+function rateLimitMiddleware(maxRequests = 10, windowMs = 60000) {
+  return (req: any, res: any, next: any) => {
+    const ip = req.ip || req.connection?.remoteAddress || 'unknown';
+    if (!rateLimit(ip, maxRequests, windowMs)) {
+      return res.status(429).json({ error: "Too many requests. Please slow down." });
+    }
+    next();
+  };
+}
 
 // ─── Server ───────────────────────────────────────────────────────────────────
 
@@ -269,6 +294,9 @@ async function startServer() {
   const PORT = parseInt(process.env.PORT || '3000', 10);
 
   app.use(express.json({ limit: '1mb' }));
+
+  // Rate limit all AI endpoints
+  app.use('/api/', rateLimitMiddleware(20, 60000));
 
   // ── Main BuJo intent endpoint ──────────────────────────────────────────────
   app.post("/api/bujo", async (req, res) => {
@@ -279,29 +307,50 @@ async function startServer() {
         provider,
         openrouterApiKey,
         openrouterModel,
-        existingCollections,   // optional: string[] of collection titles for context
+        geminiModel,
+        existingCollections,
       } = req.body;
 
-      if (!text) {
+      if (!text || typeof text !== 'string') {
         return res.status(400).json({ error: "Text is required" });
+      }
+      if (text.length > 2000) {
+        return res.status(400).json({ error: "Text must be under 2000 characters." });
       }
 
       const systemPrompt = buildSystemPrompt(currentDate, existingCollections);
-      let parsedResponse: { reply: string; actions: any[] };
+      let parsedResponse: { response?: string; reply?: string; actions: any[] };
 
-      if (provider === 'openrouter' && openrouterApiKey) {
+      const effectiveKey = openrouterApiKey || process.env.SERVER_OPENROUTER_KEY || '';
+      if (provider === 'openrouter' && effectiveKey) {
         const model = openrouterModel || 'google/gemini-2.5-flash';
-        const raw = await callOpenRouter(model, openrouterApiKey, [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: text }
-        ]);
-        console.log('[BuJo Server] OpenRouter raw:', raw.slice(0, 500));
-        const jsonMatch = raw.match(/\{[\s\S]*\}/);
-        const cleaned = jsonMatch ? jsonMatch[0] : raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
-        parsedResponse = JSON.parse(cleaned);
+        try {
+          const raw = await callOpenRouter(model, effectiveKey, [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: text }
+          ]);
+          console.log('[BuJo Server] OpenRouter raw:', raw.slice(0, 500));
+          const jsonMatch = raw.match(/\{[\s\S]*\}/);
+          const cleaned = jsonMatch ? jsonMatch[0] : raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+          parsedResponse = JSON.parse(cleaned);
+        } catch (orError) {
+          console.error('[BuJo Server] OpenRouter failed, falling back to Gemini:', orError);
+          const fallbackModel = geminiModel || 'gemini-2.5-flash';
+          const response = await ai.models.generateContent({
+            model: fallbackModel,
+            contents: `${systemPrompt}\n\nUser says: "${text}"`,
+            config: {
+              responseMimeType: "application/json",
+              responseSchema: bujoSchema,
+              temperature: 0.2,
+            }
+          });
+          parsedResponse = JSON.parse(response.text || '{}');
+        }
       } else {
+        const model = geminiModel || 'gemini-2.5-flash';
         const response = await ai.models.generateContent({
-          model: "gemini-2.5-flash",
+          model,
           contents: `${systemPrompt}\n\nUser says: "${text}"`,
           config: {
             responseMimeType: "application/json",
@@ -325,20 +374,30 @@ async function startServer() {
   // ── Monthly review endpoint ────────────────────────────────────────────────
   app.post("/api/review", async (req, res) => {
     try {
-      const { stats, monthFormat, provider, openrouterApiKey, openrouterModel } = req.body;
+      const { stats, monthFormat, provider, openrouterApiKey, openrouterModel, geminiModel } = req.body;
 
       const prompt = buildReviewPrompt(stats, monthFormat);
       let review: string;
 
-      if (provider === 'openrouter' && openrouterApiKey) {
+      const effectiveReviewKey = openrouterApiKey || process.env.SERVER_OPENROUTER_KEY || '';
+      if (provider === 'openrouter' && effectiveReviewKey) {
         const model = openrouterModel || 'google/gemini-2.5-flash';
-        review = await callOpenRouter(model, openrouterApiKey, [
-          { role: 'system', content: 'You are a direct, experienced Bullet Journal coach.' },
-          { role: 'user', content: prompt }
-        ]);
+        try {
+          review = await callOpenRouter(model, effectiveReviewKey, [
+            { role: 'system', content: 'You are a direct, experienced Bullet Journal coach.' },
+            { role: 'user', content: prompt }
+          ]);
+        } catch (orError) {
+          console.error('[BuJo Server] Review OpenRouter failed, falling back to Gemini:', orError);
+          const response = await ai.models.generateContent({
+            model: geminiModel || 'gemini-2.5-flash',
+            contents: prompt,
+          });
+          review = response.text || '';
+        }
       } else {
         const response = await ai.models.generateContent({
-          model: "gemini-2.5-flash",
+          model: geminiModel || 'gemini-2.5-flash',
           contents: prompt,
         });
         review = response.text || '';
@@ -355,9 +414,12 @@ async function startServer() {
   // Use this for real-time "what did I mean?" feedback as the user types
   app.post("/api/parse-hint", async (req, res) => {
     try {
-      const { text, currentDate, provider, openrouterApiKey, openrouterModel } = req.body;
+      const { text, currentDate, provider, openrouterApiKey, openrouterModel, geminiModel } = req.body;
 
-      if (!text || text.trim().length < 3) {
+      if (!text || typeof text !== 'string' || text.trim().length < 3) {
+        return res.json({ hint: null });
+      }
+      if (text.length > 2000) {
         return res.json({ hint: null });
       }
 
@@ -376,14 +438,25 @@ Return ONLY the JSON. No explanation.`;
 
       let raw: string;
 
-      if (provider === 'openrouter' && openrouterApiKey) {
+      const effectiveHintKey = openrouterApiKey || process.env.SERVER_OPENROUTER_KEY || '';
+      if (provider === 'openrouter' && effectiveHintKey) {
         const model = openrouterModel || 'google/gemini-2.5-flash';
-        raw = await callOpenRouter(model, openrouterApiKey, [
-          { role: 'user', content: hint_prompt }
-        ], 0.0);
+        try {
+          raw = await callOpenRouter(model, effectiveHintKey, [
+            { role: 'user', content: hint_prompt }
+          ], 0.0);
+        } catch (orError) {
+          console.error('[BuJo Server] Parse-hint OpenRouter failed, falling back to Gemini:', orError);
+          const response = await ai.models.generateContent({
+            model: geminiModel || 'gemini-2.5-flash',
+            contents: hint_prompt,
+            config: { responseMimeType: "application/json", temperature: 0.0 }
+          });
+          raw = response.text || '{}';
+        }
       } else {
         const response = await ai.models.generateContent({
-          model: "gemini-2.5-flash",
+          model: geminiModel || 'gemini-2.5-flash',
           contents: hint_prompt,
           config: { responseMimeType: "application/json", temperature: 0.0 }
         });
