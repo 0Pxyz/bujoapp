@@ -114,6 +114,7 @@ The BuJo system has three log types and collections:
 6. The reply should be warm, brief (1-3 sentences), and confirm what you understood — not a bullet list of what you did.
 7. Never lose information. If in doubt, create a note.
 8. For insights requests ("review", "how am I doing", "monthly review"), return actionType="insights".
+9. **CRITICAL: You MUST return at least one action for any request that involves creating, logging, scheduling, or organizing something. An empty actions array is not acceptable for actionable requests. If the user asks to add a task, create a collection, log an event, etc., you MUST include the corresponding action(s).**
 
 ${collectionsCtx}
 
@@ -294,8 +295,9 @@ async function startServer() {
           { role: 'system', content: systemPrompt },
           { role: 'user', content: text }
         ]);
-        // Strip accidental markdown fences
-        const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+        console.log('[BuJo Server] OpenRouter raw:', raw.slice(0, 500));
+        const jsonMatch = raw.match(/\{[\s\S]*\}/);
+        const cleaned = jsonMatch ? jsonMatch[0] : raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
         parsedResponse = JSON.parse(cleaned);
       } else {
         const response = await ai.models.generateContent({
@@ -307,8 +309,11 @@ async function startServer() {
             temperature: 0.2,
           }
         });
+        console.log('[BuJo Server] Gemini raw text:', (response.text || '').slice(0, 500));
         parsedResponse = JSON.parse(response.text || '{}');
       }
+
+      console.log('[BuJo Server] parsed response:', JSON.stringify(parsedResponse));
 
       res.json(parsedResponse);
     } catch (error) {

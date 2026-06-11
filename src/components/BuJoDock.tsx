@@ -90,16 +90,19 @@ export const BuJoDock: React.FC<BuJoDockProps> = ({ className, isMobile: propMob
 
       const data: ApiResponse = await res.json();
       
+      console.log('[BuJoDock] AI response:', JSON.stringify(data));
+      
       if (data.actions && data.actions.length > 0) {
-        const idMap = new Map<string, string>(); // ref -> realId
+        const idMap = new Map<string, string>();
 
         for (const action of data.actions) {
+          console.log('[BuJoDock] processing action:', JSON.stringify(action));
           if (action.actionType === "create_collection" && action.collectionTitle) {
-            // Check if collection already exists
              const existing = collections.find(c => c.title.toLowerCase() === action.collectionTitle?.toLowerCase());
              let newId = existing?.id;
              if (!newId) {
                newId = createCollection(action.collectionTitle);
+               console.log('[BuJoDock] created collection:', action.collectionTitle, newId);
              }
              if (action.collectionIdRef && newId) {
                idMap.set(action.collectionIdRef, newId);
@@ -109,6 +112,10 @@ export const BuJoDock: React.FC<BuJoDockProps> = ({ className, isMobile: propMob
 
         for (const action of data.actions) {
           if (action.actionType === "add_entry" && action.text) {
+             const date = action.date || format(new Date(), 'yyyy-MM-dd');
+             let logType = action.logType || 'daily';
+             const type = (action.entryType as string) === 'habit' ? 'note' : (action.entryType || 'task');
+
              let cid: string | undefined = undefined;
              if (action.targetCollectionRef) {
                cid = idMap.get(action.targetCollectionRef);
@@ -117,14 +124,19 @@ export const BuJoDock: React.FC<BuJoDockProps> = ({ className, isMobile: propMob
                cid = match?.id;
              }
 
-             const date = action.date || format(new Date(), 'yyyy-MM-dd');
-             const logType = action.logType || 'daily';
-             const type = (action.entryType as string) === 'habit' ? 'note' : (action.entryType || 'task');
+             // If entry targets a collection but we can't resolve the ID, fall back to daily so it's visible
+             if (logType === 'collection' && !cid) {
+               logType = 'daily';
+             }
+
              const signifiers = { priority: action.signifier === 'priority', idea: action.signifier === 'idea' || action.signifier === 'inspiration', explore: action.signifier === 'explore' };
 
+             console.log('[BuJoDock] adding entry:', { text: action.text, type, logType, date, cid });
              addEntry(action.text, type, logType, date, signifiers, cid);
           }
         }
+      } else {
+        console.log('[BuJoDock] no actions to process, reply:', data.reply);
       }
 
       setReplyText(data.reply);
