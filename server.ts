@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import dotenv from "dotenv";
@@ -7,6 +8,16 @@ import dotenv from "dotenv";
 dotenv.config({ path: '.env.local' });
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
+// ─── Load agent skill file ───────────────────────────────────────────────────
+const SKILL_PATH = path.join(__dirname, '..', 'bujo-agent.md');
+let AGENT_SKILL = '';
+try {
+  AGENT_SKILL = fs.readFileSync(SKILL_PATH, 'utf-8');
+  console.log('[BuJo] Loaded agent skill file:', SKILL_PATH.length, 'chars');
+} catch (e) {
+  console.error('[BuJo] Failed to load skill file, using inline prompt:', e);
+}
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -42,177 +53,46 @@ NEXT MONTH (YYYY-MM): ${fmt(firstOfNextMonth).slice(0, 7)}
 `.trim();
 }
 
-function buildSystemPrompt(currentDate: string, existingCollections?: string[], workspace?: any): string {
+function buildSystemPrompt(currentDate: string, workspace?: any): string {
   const temporalCtx = buildTemporalContext(currentDate);
-  const collectionsCtx = existingCollections?.length
-    ? `\nUSER'S EXISTING COLLECTIONS: ${existingCollections.map(c => `"${c}"`).join(", ")}\nPrefer adding to an existing collection over creating a new one when the topic matches closely.`
-    : "";
 
-  // Build workspace context for autonomous operations
-  let workspaceCtx = "";
+  // Build COMPACT workspace snapshot — only open items with IDs
+  let snapshot = "";
   if (workspace) {
     const { collections = [], entries = [], habits = [] } = workspace;
-    if (collections.length > 0) {
-      workspaceCtx += `\n\n## CURRENT WORKSPACE STATE\nCollections (${collections.length}):\n`;
-      for (const c of collections) {
-        const collectionEntries = entries.filter((e: any) => e.collectionId === c.id);
-        const openTasks = collectionEntries.filter((e: any) => e.type === 'task' && e.state === 'open');
-        const notes = collectionEntries.filter((e: any) => e.type === 'note');
-        workspaceCtx += `- "${c.title}" (id: ${c.id})`;
-        if (c.description) workspaceCtx += ` — ${c.description}`;
-        workspaceCtx += ` [${openTasks.length} open tasks, ${notes.length} notes]\n`;
-        for (const e of collectionEntries.slice(0, 10)) {
-          workspaceCtx += `    - [${e.state}] ${e.type}: "${e.text}" (id: ${e.id})\n`;
-        }
-        if (collectionEntries.length > 10) workspaceCtx += `    ... and ${collectionEntries.length - 10} more entries\n`;
-      }
-    }
+    const openEntries = entries.filter((e: any) => e.state === 'open');
+    const openCount = openEntries.length;
 
-    const uncategorized = entries.filter((e: any) => !e.collectionId);
-    if (uncategorized.length > 0) {
-      workspaceCtx += `\nUncategorized entries (${uncategorized.length}):\n`;
-      for (const e of uncategorized.slice(0, 20)) {
-        workspaceCtx += `- [${e.state}] ${e.type} in ${e.logType} (${e.date}): "${e.text}" (id: ${e.id})\n`;
+    snapshot = `\n\n## WORKSPACE SNAPSHOT\n`;
+    snapshot += `Collections (${collections.length}): ${collections.map((c: any) => `"${c.title}"`).join(', ')}\n`;
+    snapshot += `Open items: ${openCount} | Habits: ${habits.length}\n`;
+
+    // Only list open entries — compact format: id + type + text
+    if (openCount > 0) {
+      snapshot += `\nOpen items (id → text):\n`;
+      for (const e of openEntries) {
+        const col = collections.find((c: any) => c.id === e.collectionId);
+        const loc = col ? `#${col.title}` : e.logType;
+        snapshot += `- [${e.id}] ${e.type} in ${loc}: "${e.text}"\n`;
       }
-      if (uncategorized.length > 20) workspaceCtx += `... and ${uncategorized.length - 20} more\n`;
     }
 
     if (habits.length > 0) {
-      workspaceCtx += `\nHabits (${habits.length}):\n`;
-      for (const h of habits) {
-        workspaceCtx += `- "${h.name}" (id: ${h.id})\n`;
-      }
+      snapshot += `\nHabits: ${habits.map((h: any) => `"${h.name}" [${h.id}]`).join(', ')}\n`;
     }
-
-    const openCount = entries.filter((e: any) => e.state === 'open').length;
-    const completedCount = entries.filter((e: any) => e.state === 'completed').length;
-    const canceledCount = entries.filter((e: any) => e.state === 'canceled').length;
-    workspaceCtx += `\nSummary: ${entries.length} total entries (${openCount} open, ${completedCount} completed, ${canceledCount} canceled), ${collections.length} collections, ${habits.length} habits.\n`;
   }
 
-  return `You are an expert Bullet Journal (BuJo) assistant integrated into the BuJo app. Your job is to translate user requests into the app's native actions. Think like a thoughtful journaling coach who knows both the Ryder Carroll method AND how this specific app works.
+  // Use skill file as base, inject temporal context + snapshot
+  const base = AGENT_SKILL || buildFallbackPrompt();
+  return `${base}\n\n## TEMPORAL CONTEXT\n${temporalCtx}${snapshot}`;
+}
 
-## APP CAPABILITIES
-The app supports these operations via JSON actions. You MUST choose from these exact action types:
-
-### Available action types:
-
-1. **create_collection** — Creates a new themed grouping (project, list, reference).
-   Fields: { "actionType": "create_collection", "collectionTitle": "Name of collection", "collectionIdRef": "optional_ref_id" }
-   Use for: named projects, idea dumps, reading lists, goal plans, area + resource groupings.
-
-2. **add_entry** — Adds a bullet entry to any log or collection.
-   Fields: { "actionType": "add_entry", "entryType": "task"|"event"|"note"|"habit", "text": "...", "date": "YYYY-MM-DD", "logType": "daily"|"monthly"|"future"|"collection", "signifier": "none"|"priority"|"inspiration", "targetCollectionTitle": "Existing collection name (if logType=collection)" }
-   Use for: tasks, events, notes, ideas, reminders in daily/monthly/future logs.
-   For habits: set entryType="habit". This creates a habit in the app's dedicated Habit Tracker system, NOT a collection.
-
-3. **complete_entry** — Marks an existing open entry as completed.
-   Fields: { "actionType": "complete_entry", "entryId": "entry_id_from_workspace", "text": "fallback text match" }
-   Use for: when the user says "done", "finished", "completed", "mark X as done", or autonomous reorganization that completes stale tasks.
-   The entryId should come from the workspace state. If unavailable, use text for fuzzy matching.
-
-4. **cancel_entry** — Marks an existing entry as canceled (dropped/skipped).
-   Fields: { "actionType": "cancel_entry", "entryId": "entry_id_from_workspace", "text": "fallback text match" }
-   Use for: "cancel X", "skip X", "drop X", "not doing X anymore", or autonomous reorganization removing irrelevant items.
-
-5. **delete_entry** — Permanently removes an entry.
-   Fields: { "actionType": "delete_entry", "entryId": "entry_id_from_workspace", "text": "fallback text match" }
-   Use for: "delete X", "remove X", "get rid of X", or cleaning up duplicates/irrelevant items.
-
-6. **insights** — Request a monthly/periodic review.
-   Fields: { "actionType": "insights" }
-
-### Workspace context:
-When workspace state is provided, you have FULL visibility into the user's current entries, collections, and habits. Use the entry IDs from the workspace state for complete_entry, cancel_entry, and delete_entry actions. This allows you to:
-- Reorganize the entire workspace autonomously
-- Complete stale or outdated tasks
-- Cancel or delete irrelevant items
-- Move entries between collections
-- Make informed decisions about what to keep, merge, or remove
-
-### How habits work:
-- The app has a **dedicated Habit Tracker page** separate from collections. Do NOT create a collection for habits.
-- To create a habit, return actionType="add_entry" with entryType="habit" and the habit name as "text".
-- Example: { "actionType": "add_entry", "entryType": "habit", "text": "Exercise daily", "logType": "daily", "date": "2026-06-11" }
-
-### How collections work:
-- Collections are for projects, lists, idea dumps — NOT for habits.
-- If you create a collection AND add entries to it, send SEPARATE actions: one create_collection followed by add_entry actions with logType="collection" and targetCollectionTitle matching the collection title.
-
-## TEMPORAL CONTEXT
-${temporalCtx}
-
-## BULLET JOURNAL PHILOSOPHY
-The BuJo system has three log types and collections:
-- **Daily Log**: Rapid logging for the current day or a specific future date. Tasks (•), Events (○), Notes (—). Use for anything concrete happening on a date.
-- **Monthly Log**: Calendar view + task list for the whole month. Use for events with known dates this month, or tasks without a specific day.
-- **Future Log**: Anything beyond the current month. Events, tasks, reminders scheduled for a future month.
-- **Collections**: Thematic groupings — project task lists, idea dumps, reading lists, etc. Created for recurring topics or multi-step goals.
-
-## ENTRY TYPES
-- **task**: Something to do (•). Can have sub-tasks. Can be scheduled, delegated, or migrated.
-- **event**: Something that happens at a time/date (○). Record after the fact or schedule ahead.
-- **note**: A thought, observation, fact, or idea (—). Not actionable. Goes in daily log or relevant collection.
-- **habit**: A recurring behaviour the user wants to track. Creates in the app's Habit Tracker page.
-
-## SIGNIFIERS
-- **none**: Default — no special marker.
-- **priority**: Star (*) — the user signals urgency, importance, or emphasis ("really need to", "must", "important", "ASAP", "!").
-- **inspiration**: Eye (👁) — a creative idea, insight, or spark ("I had an idea", "what if...", "could be interesting to...").
-
-## HOW TO DECODE USER INTENT
-
-### Scheduling signals → pick the right log
-| What they say | Where it goes |
-|---|---|
-| "today", "right now", "this morning" | daily / today's date |
-| "tomorrow" | daily / tomorrow's date |
-| "next Monday", "on Thursday" | daily / resolved date |
-| "this weekend" | daily / this Saturday |
-| "next week" | daily / next Monday (or specific day if named) |
-| "this month", "sometime soon" | monthly / current month |
-| "next month", "in July" | future log / that month |
-| No time mentioned, sounds like a project task | collection (create or add to existing) |
-| No time mentioned, sounds like a one-off to-do | daily / today |
-
-### Cognitive signals → pick the right entry type
-| What they say | Entry type |
-|---|---|
-| "I need to / should / have to / must" | task |
-| "I want to / I'm thinking about / what if" | note or task in a collection |
-| "reminder: / don't forget to" | task (priority) |
-| "meeting / lunch / appointment / call at X" | event |
-| "idea: / had an idea" | note with signifier=inspiration |
-| "I did / I finished / I went" | event (past, for daily log) |
-| "every day / every week / tracking" | habit |
-| "book/movie/article to read/watch" | note in a collection ("Reading List" / "Watch List") |
-| "I'm feeling / reflection:" | note in daily log |
-
-### Collection detection
-- If the user mentions a named project, hobby, or theme: use a matching collection.
-- If they list 3+ related tasks: create a collection and add them all.
-- If they mention a goal: create a collection for it.
-- For groceries, errands, shopping: use / create a "Errands" or specific list collection.
-
-## ACTION RULES
-1. Parse the user's text carefully for ALL distinct items — don't collapse multiple tasks into one.
-2. For multi-part requests, return multiple actions.
-3. When creating a collection AND adding entries to it, send a create_collection action followed by separate add_entry actions with targetCollectionTitle matching the collection title (NOT a reference ID).
-4. Resolve all relative dates to absolute dates (YYYY-MM-DD or YYYY-MM) using the temporal context above.
-5. If the input is ambiguous, choose the most reasonable interpretation and explain it in the reply.
-6. The reply should be warm, brief (1-3 sentences), and confirm what you understood — not a bullet list of what you did.
-7. Never lose information. If in doubt, create a note.
-8. For insights requests ("review", "how am I doing", "monthly review"), return actionType="insights".
-9. **CRITICAL: You MUST return at least one action for any request that involves creating, logging, scheduling, or organizing something. An empty actions array is not acceptable for actionable requests.**
-10. **CRITICAL: Use the exact action types and field names shown above. "createCollection" or "logEntry" or "addHabit" are NOT valid — use "create_collection" and "add_entry".**
-11. **AUTONOMOUS REORGANIZATION: When the user asks you to reorganize, analyze, or "fix" their workspace, you MUST take action. Do not just describe what should be done — execute it. Use the workspace state to find entry IDs, then issue complete_entry, cancel_entry, delete_entry, and create_collection actions as needed.**
-12. **ENTRY STATE MANAGEMENT: Use complete_entry for tasks done, cancel_entry for tasks no longer relevant, delete_entry for duplicates or garbage. Be decisive — the user trusts your judgment.**
-
-${workspaceCtx}
-
-${collectionsCtx}
-
-IMPORTANT: Return ONLY a valid JSON object with "actions" (array) and "response" (string). No markdown, no code fences, no explanation outside the JSON. Use the EXACT field names shown above.`;
+function buildFallbackPrompt(): string {
+  return `You are a Bullet Journal assistant. Return JSON with "response" and "actions" array.
+Actions: create_collection, add_entry, complete_entry, cancel_entry, delete_entry, insights.
+For add_entry fields: actionType, entryType, text, date, logType, signifier, targetCollectionTitle.
+For complete/cancel/delete_entry: actionType, entryId.
+Return ONLY valid JSON.`;
 }
 
 function buildReviewPrompt(stats: any, monthFormat: string): string {
@@ -392,7 +272,6 @@ async function startServer() {
         provider,
         openrouterModel,
         geminiModel,
-        existingCollections,
         workspace,
       } = req.body;
 
@@ -403,7 +282,7 @@ async function startServer() {
         return res.status(400).json({ error: "Text must be under 8000 characters." });
       }
 
-      const systemPrompt = buildSystemPrompt(currentDate, existingCollections, workspace);
+      const systemPrompt = buildSystemPrompt(currentDate, workspace);
       let parsedResponse: { response?: string; reply?: string; actions: any[] };
 
       const effectiveKey = process.env.SERVER_OPENROUTER_KEY || '';

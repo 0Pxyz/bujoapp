@@ -77,6 +77,20 @@ export const BuJoDock: React.FC<BuJoDockProps> = ({ className, isMobile: propMob
 
     try {
       const ai = settings.ai;
+
+      // Build compact workspace snapshot — only open entries with IDs
+      const openEntries = entries
+        .filter(e => e.state === 'open')
+        .map(e => ({
+          id: e.id,
+          text: e.text,
+          type: e.type,
+          state: e.state,
+          logType: e.logType,
+          collectionId: e.collectionId,
+          signifiers: e.signifiers,
+        }));
+
       const res = await fetch("/api/bujo", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -86,19 +100,9 @@ export const BuJoDock: React.FC<BuJoDockProps> = ({ className, isMobile: propMob
           provider: ai?.provider,
           openrouterModel: ai?.openrouterModel,
           geminiModel: ai?.geminiModel,
-          existingCollections: collections.map(c => c.title),
           workspace: {
-            collections: collections.map(c => ({ id: c.id, title: c.title, description: c.description })),
-            entries: entries.map(e => ({
-              id: e.id,
-              text: e.text,
-              type: e.type,
-              state: e.state,
-              logType: e.logType,
-              date: e.date,
-              collectionId: e.collectionId,
-              signifiers: e.signifiers,
-            })),
+            collections: collections.map(c => ({ id: c.id, title: c.title })),
+            entries: openEntries,
             habits: habits.map(h => ({ id: h.id, name: h.name })),
           },
         })
