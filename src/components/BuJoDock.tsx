@@ -7,7 +7,7 @@ import { cn } from '../lib/utils';
 import { LogType } from '../types';
 
 interface ActionParam {
-  actionType: "create_collection" | "add_entry" | "insights";
+  actionType: "create_collection" | "add_entry" | "insights" | "complete_entry" | "cancel_entry" | "delete_entry" | "update_entry";
   collectionTitle?: string;
   collectionIdRef?: string;
   text?: string;
@@ -17,6 +17,9 @@ interface ActionParam {
   date?: string;
   targetCollectionRef?: string;
   targetCollectionTitle?: string;
+  entryId?: string;
+  newState?: string;
+  entryRef?: string;
 }
 
 interface ApiResponse {
@@ -38,7 +41,7 @@ function useIsMobile() {
 
 export const BuJoDock: React.FC<BuJoDockProps> = ({ className, isMobile: propMobile }) => {
   const isMobile = propMobile ?? useIsMobile();
-  const { collections, createCollection, addEntry, addHabit, settings, firestoreError } = useBuJo();
+  const { collections, entries, habits, createCollection, addEntry, addHabit, updateEntryState, deleteEntry, settings, firestoreError } = useBuJo();
   const [expanded, setExpanded] = useState(false);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
@@ -74,7 +77,6 @@ export const BuJoDock: React.FC<BuJoDockProps> = ({ className, isMobile: propMob
 
     try {
       const ai = settings.ai;
-      const apiKey = localStorage.getItem('openrouterApiKey') || ai?.openrouterApiKey || '';
       const res = await fetch("/api/bujo", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -82,10 +84,23 @@ export const BuJoDock: React.FC<BuJoDockProps> = ({ className, isMobile: propMob
           text: textToSend,
           currentDate: format(new Date(), 'yyyy-MM-dd'),
           provider: ai?.provider,
-          openrouterApiKey: apiKey,
           openrouterModel: ai?.openrouterModel,
           geminiModel: ai?.geminiModel,
           existingCollections: collections.map(c => c.title),
+          workspace: {
+            collections: collections.map(c => ({ id: c.id, title: c.title, description: c.description })),
+            entries: entries.map(e => ({
+              id: e.id,
+              text: e.text,
+              type: e.type,
+              state: e.state,
+              logType: e.logType,
+              date: e.date,
+              collectionId: e.collectionId,
+              signifiers: e.signifiers,
+            })),
+            habits: habits.map(h => ({ id: h.id, name: h.name })),
+          },
         })
       });
 
@@ -125,6 +140,9 @@ export const BuJoDock: React.FC<BuJoDockProps> = ({ className, isMobile: propMob
           targetCollectionTitle: raw.targetCollectionTitle || raw.collectionName || entry.targetCollectionTitle,
           collectionTitle: raw.collectionTitle || raw.collectionName || entry.collectionTitle || entry.collectionName,
           collectionIdRef: raw.collectionIdRef || entry.collectionIdRef,
+          entryId: raw.entryId || raw.targetEntryId || entry.entryId,
+          entryRef: raw.entryRef || raw.targetEntryRef || entry.entryRef,
+          newState: raw.newState || raw.state,
         };
 
         return normalized;
@@ -213,6 +231,61 @@ export const BuJoDock: React.FC<BuJoDockProps> = ({ className, isMobile: propMob
 
              console.log('[BuJoDock] adding entry:', { text: action.text, type, logType, date, cid });
              addEntry(action.text, type, logType, date, signifiers, cid);
+          }
+
+          // Handle complete_entry: mark an existing entry as completed
+          if (action.actionType === "complete_entry") {
+            const entryId = action.entryId || action.entryRef;
+            if (entryId) {
+              const target = entries.find(e => e.id === entryId);
+              if (target) {
+                updateEntryState(entryId, 'completed');
+                console.log('[BuJoDock] completed entry:', entryId);
+              } else {
+                // Try matching by text fuzzy
+                const match = entries.find(e => e.text.toLowerCase().includes((action.text || '').toLowerCase()) && e.state === 'open');
+                if (match) {
+                  updateEntryState(match.id, 'completed');
+                  console.log('[BuJoDock] completed entry by text match:', match.id);
+                }
+              }
+            }
+          }
+
+          // Handle cancel_entry: mark an existing entry as canceled
+          if (action.actionType === "cancel_entry") {
+            const entryId = action.entryId || action.entryRef;
+            if (entryId) {
+              const target = entries.find(e => e.id === entryId);
+              if (target) {
+                updateEntryState(entryId, 'canceled');
+                console.log('[BuJoDock] canceled entry:', entryId);
+              } else {
+                const match = entries.find(e => e.text.toLowerCase().includes((action.text || '').toLowerCase()) && e.state === 'open');
+                if (match) {
+                  updateEntryState(match.id, 'canceled');
+                  console.log('[BuJoDock] canceled entry by text match:', match.id);
+                }
+              }
+            }
+          }
+
+          // Handle delete_entry: permanently remove an entry
+          if (action.actionType === "delete_entry") {
+            const entryId = action.entryId || action.entryRef;
+            if (entryId) {
+              const target = entries.find(e => e.id === entryId);
+              if (target) {
+                deleteEntry(entryId);
+                console.log('[BuJoDock] deleted entry:', entryId);
+              } else {
+                const match = entries.find(e => e.text.toLowerCase().includes((action.text || '').toLowerCase()));
+                if (match) {
+                  deleteEntry(match.id);
+                  console.log('[BuJoDock] deleted entry by text match:', match.id);
+                }
+              }
+            }
           }
         }
       } else {

@@ -42,11 +42,53 @@ NEXT MONTH (YYYY-MM): ${fmt(firstOfNextMonth).slice(0, 7)}
 `.trim();
 }
 
-function buildSystemPrompt(currentDate: string, existingCollections?: string[]): string {
+function buildSystemPrompt(currentDate: string, existingCollections?: string[], workspace?: any): string {
   const temporalCtx = buildTemporalContext(currentDate);
   const collectionsCtx = existingCollections?.length
     ? `\nUSER'S EXISTING COLLECTIONS: ${existingCollections.map(c => `"${c}"`).join(", ")}\nPrefer adding to an existing collection over creating a new one when the topic matches closely.`
     : "";
+
+  // Build workspace context for autonomous operations
+  let workspaceCtx = "";
+  if (workspace) {
+    const { collections = [], entries = [], habits = [] } = workspace;
+    if (collections.length > 0) {
+      workspaceCtx += `\n\n## CURRENT WORKSPACE STATE\nCollections (${collections.length}):\n`;
+      for (const c of collections) {
+        const collectionEntries = entries.filter((e: any) => e.collectionId === c.id);
+        const openTasks = collectionEntries.filter((e: any) => e.type === 'task' && e.state === 'open');
+        const notes = collectionEntries.filter((e: any) => e.type === 'note');
+        workspaceCtx += `- "${c.title}" (id: ${c.id})`;
+        if (c.description) workspaceCtx += ` — ${c.description}`;
+        workspaceCtx += ` [${openTasks.length} open tasks, ${notes.length} notes]\n`;
+        for (const e of collectionEntries.slice(0, 10)) {
+          workspaceCtx += `    - [${e.state}] ${e.type}: "${e.text}" (id: ${e.id})\n`;
+        }
+        if (collectionEntries.length > 10) workspaceCtx += `    ... and ${collectionEntries.length - 10} more entries\n`;
+      }
+    }
+
+    const uncategorized = entries.filter((e: any) => !e.collectionId);
+    if (uncategorized.length > 0) {
+      workspaceCtx += `\nUncategorized entries (${uncategorized.length}):\n`;
+      for (const e of uncategorized.slice(0, 20)) {
+        workspaceCtx += `- [${e.state}] ${e.type} in ${e.logType} (${e.date}): "${e.text}" (id: ${e.id})\n`;
+      }
+      if (uncategorized.length > 20) workspaceCtx += `... and ${uncategorized.length - 20} more\n`;
+    }
+
+    if (habits.length > 0) {
+      workspaceCtx += `\nHabits (${habits.length}):\n`;
+      for (const h of habits) {
+        workspaceCtx += `- "${h.name}" (id: ${h.id})\n`;
+      }
+    }
+
+    const openCount = entries.filter((e: any) => e.state === 'open').length;
+    const completedCount = entries.filter((e: any) => e.state === 'completed').length;
+    const canceledCount = entries.filter((e: any) => e.state === 'canceled').length;
+    workspaceCtx += `\nSummary: ${entries.length} total entries (${openCount} open, ${completedCount} completed, ${canceledCount} canceled), ${collections.length} collections, ${habits.length} habits.\n`;
+  }
 
   return `You are an expert Bullet Journal (BuJo) assistant integrated into the BuJo app. Your job is to translate user requests into the app's native actions. Think like a thoughtful journaling coach who knows both the Ryder Carroll method AND how this specific app works.
 
@@ -56,7 +98,7 @@ The app supports these operations via JSON actions. You MUST choose from these e
 ### Available action types:
 
 1. **create_collection** — Creates a new themed grouping (project, list, reference).
-   Fields: { "actionType": "create_collection", "collectionTitle": "Name of collection" }
+   Fields: { "actionType": "create_collection", "collectionTitle": "Name of collection", "collectionIdRef": "optional_ref_id" }
    Use for: named projects, idea dumps, reading lists, goal plans, area + resource groupings.
 
 2. **add_entry** — Adds a bullet entry to any log or collection.
@@ -64,8 +106,29 @@ The app supports these operations via JSON actions. You MUST choose from these e
    Use for: tasks, events, notes, ideas, reminders in daily/monthly/future logs.
    For habits: set entryType="habit". This creates a habit in the app's dedicated Habit Tracker system, NOT a collection.
 
-3. **insights** — Request a monthly/periodic review.
+3. **complete_entry** — Marks an existing open entry as completed.
+   Fields: { "actionType": "complete_entry", "entryId": "entry_id_from_workspace", "text": "fallback text match" }
+   Use for: when the user says "done", "finished", "completed", "mark X as done", or autonomous reorganization that completes stale tasks.
+   The entryId should come from the workspace state. If unavailable, use text for fuzzy matching.
+
+4. **cancel_entry** — Marks an existing entry as canceled (dropped/skipped).
+   Fields: { "actionType": "cancel_entry", "entryId": "entry_id_from_workspace", "text": "fallback text match" }
+   Use for: "cancel X", "skip X", "drop X", "not doing X anymore", or autonomous reorganization removing irrelevant items.
+
+5. **delete_entry** — Permanently removes an entry.
+   Fields: { "actionType": "delete_entry", "entryId": "entry_id_from_workspace", "text": "fallback text match" }
+   Use for: "delete X", "remove X", "get rid of X", or cleaning up duplicates/irrelevant items.
+
+6. **insights** — Request a monthly/periodic review.
    Fields: { "actionType": "insights" }
+
+### Workspace context:
+When workspace state is provided, you have FULL visibility into the user's current entries, collections, and habits. Use the entry IDs from the workspace state for complete_entry, cancel_entry, and delete_entry actions. This allows you to:
+- Reorganize the entire workspace autonomously
+- Complete stale or outdated tasks
+- Cancel or delete irrelevant items
+- Move entries between collections
+- Make informed decisions about what to keep, merge, or remove
 
 ### How habits work:
 - The app has a **dedicated Habit Tracker page** separate from collections. Do NOT create a collection for habits.
@@ -142,6 +205,10 @@ The BuJo system has three log types and collections:
 8. For insights requests ("review", "how am I doing", "monthly review"), return actionType="insights".
 9. **CRITICAL: You MUST return at least one action for any request that involves creating, logging, scheduling, or organizing something. An empty actions array is not acceptable for actionable requests.**
 10. **CRITICAL: Use the exact action types and field names shown above. "createCollection" or "logEntry" or "addHabit" are NOT valid — use "create_collection" and "add_entry".**
+11. **AUTONOMOUS REORGANIZATION: When the user asks you to reorganize, analyze, or "fix" their workspace, you MUST take action. Do not just describe what should be done — execute it. Use the workspace state to find entry IDs, then issue complete_entry, cancel_entry, delete_entry, and create_collection actions as needed.**
+12. **ENTRY STATE MANAGEMENT: Use complete_entry for tasks done, cancel_entry for tasks no longer relevant, delete_entry for duplicates or garbage. Be decisive — the user trusts your judgment.**
+
+${workspaceCtx}
 
 ${collectionsCtx}
 
@@ -216,7 +283,7 @@ const bujoSchema: Schema = {
         properties: {
           actionType: {
             type: Type.STRING,
-            enum: ["create_collection", "add_entry", "insights"],
+            enum: ["create_collection", "add_entry", "complete_entry", "cancel_entry", "delete_entry", "insights"],
             description: "The type of action to perform."
           },
 
@@ -224,6 +291,10 @@ const bujoSchema: Schema = {
           collectionTitle: {
             type: Type.STRING,
             description: "For create_collection: The title of the new collection. Be specific (e.g. 'Marathon Training Plan', not 'Fitness')."
+          },
+          collectionIdRef: {
+            type: Type.STRING,
+            description: "Optional reference ID for a collection, used when other actions need to reference a newly created collection."
           },
 
           // ── add_entry fields ──
@@ -253,6 +324,20 @@ const bujoSchema: Schema = {
           targetCollectionTitle: {
             type: Type.STRING,
             description: "For add_entry with logType=collection: The title of an EXISTING collection to add to. For NEW collections, create_collection will be handled first, then this field matches by title."
+          },
+
+          // ── complete_entry / cancel_entry / delete_entry fields ──
+          entryId: {
+            type: Type.STRING,
+            description: "For complete_entry, cancel_entry, delete_entry: The ID of the entry from the workspace state. Use the exact ID provided."
+          },
+          entryRef: {
+            type: Type.STRING,
+            description: "Alternative field name for entryId. The ID of the entry from workspace state."
+          },
+          newState: {
+            type: Type.STRING,
+            description: "For state changes: the new state to set (completed, canceled, etc.)"
           }
         },
         required: ["actionType"]
@@ -305,23 +390,23 @@ async function startServer() {
         text,
         currentDate,
         provider,
-        openrouterApiKey,
         openrouterModel,
         geminiModel,
         existingCollections,
+        workspace,
       } = req.body;
 
       if (!text || typeof text !== 'string') {
         return res.status(400).json({ error: "Text is required" });
       }
-      if (text.length > 2000) {
-        return res.status(400).json({ error: "Text must be under 2000 characters." });
+      if (text.length > 8000) {
+        return res.status(400).json({ error: "Text must be under 8000 characters." });
       }
 
-      const systemPrompt = buildSystemPrompt(currentDate, existingCollections);
+      const systemPrompt = buildSystemPrompt(currentDate, existingCollections, workspace);
       let parsedResponse: { response?: string; reply?: string; actions: any[] };
 
-      const effectiveKey = openrouterApiKey || process.env.SERVER_OPENROUTER_KEY || '';
+      const effectiveKey = process.env.SERVER_OPENROUTER_KEY || '';
       if (provider === 'openrouter' && effectiveKey) {
         const model = openrouterModel || 'google/gemini-2.5-flash';
         try {
@@ -374,12 +459,12 @@ async function startServer() {
   // ── Monthly review endpoint ────────────────────────────────────────────────
   app.post("/api/review", async (req, res) => {
     try {
-      const { stats, monthFormat, provider, openrouterApiKey, openrouterModel, geminiModel } = req.body;
+      const { stats, monthFormat, provider, openrouterModel, geminiModel } = req.body;
 
       const prompt = buildReviewPrompt(stats, monthFormat);
       let review: string;
 
-      const effectiveReviewKey = openrouterApiKey || process.env.SERVER_OPENROUTER_KEY || '';
+      const effectiveReviewKey = process.env.SERVER_OPENROUTER_KEY || '';
       if (provider === 'openrouter' && effectiveReviewKey) {
         const model = openrouterModel || 'google/gemini-2.5-flash';
         try {
@@ -414,7 +499,7 @@ async function startServer() {
   // Use this for real-time "what did I mean?" feedback as the user types
   app.post("/api/parse-hint", async (req, res) => {
     try {
-      const { text, currentDate, provider, openrouterApiKey, openrouterModel, geminiModel } = req.body;
+      const { text, currentDate, provider, openrouterModel, geminiModel } = req.body;
 
       if (!text || typeof text !== 'string' || text.trim().length < 3) {
         return res.json({ hint: null });
@@ -438,7 +523,7 @@ Return ONLY the JSON. No explanation.`;
 
       let raw: string;
 
-      const effectiveHintKey = openrouterApiKey || process.env.SERVER_OPENROUTER_KEY || '';
+      const effectiveHintKey = process.env.SERVER_OPENROUTER_KEY || '';
       if (provider === 'openrouter' && effectiveHintKey) {
         const model = openrouterModel || 'google/gemini-2.5-flash';
         try {

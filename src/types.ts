@@ -82,7 +82,6 @@ export interface AppSettings {
     provider?: AiProvider;
     geminiModel?: string;
     openrouterModel?: string;
-    openrouterApiKey?: string;
   };
   syncEnabled?: boolean;
   shortcuts?: {

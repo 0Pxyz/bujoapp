@@ -294,10 +294,6 @@ export const BuJoProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateSettings = async (newSettings: Partial<AppSettings>) => {
     if (!user) return;
     const sanitized = JSON.parse(JSON.stringify(newSettings));
-    if (sanitized.ai?.openrouterApiKey) {
-      localStorage.setItem('openrouterApiKey', sanitized.ai.openrouterApiKey);
-      delete sanitized.ai.openrouterApiKey;
-    }
     const updated = { ...state.settings, ...sanitized };
     try {
       await setDoc(doc(db, 'users', user.uid, 'settings', 'default'), updated, { merge: true });

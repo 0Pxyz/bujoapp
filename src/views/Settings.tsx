@@ -14,8 +14,6 @@ const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title
 
 export const Settings = () => {
   const { settings, updateSettings, user } = useBuJo();
-  const [localApiKey, setLocalApiKey] = React.useState(() => localStorage.getItem('openrouterApiKey') || '');
-
   const T = (v: Partial<typeof settings>) => updateSettings(v);
 
   return (
@@ -188,16 +186,6 @@ export const Settings = () => {
             {provider === 'openrouter' && (
               <div className="space-y-3 pl-1">
                 <div>
-                  <label className="block text-xs font-medium text-neutral-500 mb-1.5">API Key</label>
-                  <input type="password" value={localApiKey}
-                    onChange={e => {
-                      setLocalApiKey(e.target.value);
-                      localStorage.setItem('openrouterApiKey', e.target.value);
-                    }}
-                    placeholder="sk-or-v1-..."
-                    className="w-full bg-neutral-100 dark:bg-neutral-800/50 border-none rounded-lg py-2 px-3 text-sm font-mono placeholder:text-neutral-400" />
-                </div>
-                <div>
                   <label className="block text-xs font-medium text-neutral-500 mb-1.5">Model</label>
                   <input type="text" value={settings.ai?.openrouterModel || ''}
                     onChange={e => T({ ai: { ...settings.ai, openrouterModel: e.target.value } as any })}
@@ -206,7 +194,7 @@ export const Settings = () => {
                 </div>
                 <p className="text-xs text-neutral-400 leading-relaxed">
                   Find models at <span className="text-neutral-500 underline underline-offset-2 cursor-default">openrouter.ai/models</span>.
-                  Your key is stored in your browser (localStorage) — never saved to the cloud.
+                  The OpenRouter API key is configured server-side for security.
                 </p>
               </div>
             )}

@@ -42,7 +42,6 @@ export const Insights = () => {
     setLoadingReview(true);
     try {
       const ai = settings.ai;
-      const apiKey = localStorage.getItem('openrouterApiKey') || ai?.openrouterApiKey || '';
       const res = await fetch("/api/review", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -50,7 +49,6 @@ export const Insights = () => {
           stats,
           monthFormat,
           provider: ai?.provider,
-          openrouterApiKey: apiKey,
           openrouterModel: ai?.openrouterModel,
           geminiModel: ai?.geminiModel,
         })
